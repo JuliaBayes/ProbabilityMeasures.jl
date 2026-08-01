@@ -42,7 +42,7 @@ function support end
 
 Whether `x` lies in the support.
 
-This is a *predicate*, not a precondition: [`logdensityof`](@ref) is total and
+This is a *predicate*, not a precondition: `logdensityof` is total and
 returns `-Inf` outside the support on its own, so densities do not need to call
 this. It exists for samplers, transforms, and validation.
 """

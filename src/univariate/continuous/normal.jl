@@ -95,7 +95,11 @@ end
 
 Statistics.mean(d::Normal) = d.μ
 Statistics.var(d::Normal) = d.σ^2
-Statistics.std(d::Normal) = d.σ
+# `abs` rather than a bare `d.σ`: for an invalid negative scale the two would
+# disagree with `var`, and anything using `std` as a proposal width or a tolerance
+# would get a negative number. `abs` is exact, type-preserving, and identical to
+# `sqrt(var(d))` for every valid scale.
+Statistics.std(d::Normal) = abs(d.σ)
 Statistics.median(d::Normal) = d.μ
 mode(d::Normal) = d.μ
 skewness(d::Normal) = zero(eltype(d))
@@ -136,7 +140,13 @@ function logccdf(d::Normal, x::Real)
     return z > zero(z) ? logerfc(z * invsqrt2) - logtwo : log1p(-erfc(-z * invsqrt2) / 2)
 end
 
-Statistics.quantile(d::Normal, p::Real) = xval(d, -sqrt2 * erfcinv(2 * p))
+# The parenthesisation is load-bearing. `-sqrt2 * erfcinv(...)` parses as
+# `(-sqrt2) * erfcinv(...)`, and Base defines `-(x::AbstractIrrational) = -Float64(x)`
+# -- so unary minus materializes √2 at Float64 *before* it ever meets the argument,
+# throwing away the Irrational promotion the rest of this file depends on. Negating
+# last keeps `sqrt2` a binary operand, so it adopts the argument's type and (for
+# BigFloat) its precision.
+Statistics.quantile(d::Normal, p::Real) = xval(d, -(sqrt2 * erfcinv(2 * p)))
 
 function Base.show(io::IO, d::Normal)
     return print(io, "Normal(μ=", d.μ, ", σ=", d.σ, ")")

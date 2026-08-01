@@ -115,17 +115,21 @@ function test_totality(d, xs)
         @test isfinite(logdensityof(d, x))
     end
 
-    # Invalid parameters give NaN rather than an error, and construction itself
-    # never complains.
-    bad = _invalid(d)
-    if bad !== nothing
+    # Invalid parameters produce a non-finite value rather than an error, and
+    # construction itself never complains.
+    #
+    # Deliberately *not* `isnan`: which non-finite value you get is not part of the
+    # contract. `Normal(Inf, 1.0)` is invalid but has a log-density of -Inf, and
+    # pinning the suite to NaN would push callers toward `isnan` as a validity
+    # sentinel, which silently accepts exactly that case.
+    for bad in _invalids(d)
         @test !checkparams(bad)
-        @test isnan(logdensityof(bad, first(xs)))
+        @test !isfinite(logdensityof(bad, first(xs)))
     end
 end
 
-"An instance of `typeof(d)` with invalid parameters, or `nothing` if none is known."
-_invalid(d) = nothing
+"Instances of `typeof(d)` with invalid parameters; empty if none are known."
+_invalids(d) = ()
 
 # --- Invariant 1: type genericity -------------------------------------------------
 
@@ -141,9 +145,15 @@ function test_genericity(d, xs, types)
     # Mixed parameter types must neither error nor widen past the true promotion:
     # one Float32 parameter alongside Float64 ones promotes to Float64, and no
     # further.
+    #
+    # A *tuple*, not a vector. `[Float32(a), Float64(b)]` is a `Vector{Float64}` --
+    # the literal promotes and converts the Float32 straight back, so the measure
+    # comes out homogeneous and the check passes without ever testing anything.
     p = _paramvec(d)
     if length(p) >= 2
-        mixed = _reconstruct(d, [Float32(p[1]), Float64.(p[2:end])...])
+        mixed = _reconstruct(d, (Float32(p[1]), Float64.(p[2:end])...))
+        # Assert the measure really is mixed before drawing any conclusion from it.
+        @test length(unique(fieldtypes(typeof(mixed)))) > 1
         @test logdensityof(mixed, Float32(first(xs))) isa Float64
     end
 
@@ -207,6 +217,28 @@ function test_cdf(d, xs)
     deep = float(quantile(d, 1e-300))
     if isfinite(deep)
         @test isfinite(logcdf(d, deep))
+    end
+
+    # The distribution function has to be as type-generic as the density is. Checking
+    # only `logdensityof` let a `Float64`-collapsing `quantile` through: `-sqrt2 * x`
+    # parses as `(-sqrt2) * x`, and negating an Irrational materializes it at
+    # Float64 before it ever sees the argument.
+    for T in (Float32, Float64, BigFloat)
+        dT = _withtype(d, T)
+        xT = T(first(xs))
+        @test cdf(dT, xT) isa T
+        @test ccdf(dT, xT) isa T
+        @test logcdf(dT, xT) isa T
+        @test logccdf(dT, xT) isa T
+        @test quantile(dT, T(1) / 4) isa T
+    end
+
+    # ...and as precise. A Float64 intermediate anywhere in the chain caps this at
+    # ~1e-17 instead of full BigFloat precision.
+    setprecision(BigFloat, 256) do
+        dbig = _withtype(d, BigFloat)
+        p = big"0.25"
+        @test abs(cdf(dbig, quantile(dbig, p)) - p) < 1e-60
     end
 
     # cdf must be the integral of the density.

@@ -36,7 +36,7 @@ Supertype for all probability measures.
 
 Every subtype is a *normalized* measure: its density integrates to one against
 [`reference`](@ref)`(d)`. There is no base-measure recursion and no unnormalized
-measure in this package -- [`logdensityof`](@ref) returns the finished value.
+measure in this package -- `logdensityof` returns the finished value.
 
 # Implementing a new measure
 
@@ -51,14 +51,16 @@ Everything else has a fallback: [`insupport`](@ref), [`params`](@ref),
 [`reference`](@ref), and the moment functions.
 
 Three invariants are enforced by the conformance suite
-([`ProbabilityMeasures.TestUtils.test_measure`](@ref)) and must hold:
+(`ProbabilityMeasuresTest.test_measure`, in `libs/`) and must hold:
 
  1. **Type genericity.** No `Float64` literals in the density. Constants come from
     `IrrationalConstants` or `oftype`. The result type is
     `float(promote_type(<parameter types>..., typeof(x)))`.
- 2. **Totality.** `logdensityof` never throws. It returns a correctly-typed `-Inf`
-    outside the support and `NaN` for invalid parameters. This is what makes it
-    callable from inside a GPU kernel.
+ 2. **Totality.** `logdensityof` never throws. Outside the support, and for invalid
+    parameters, it returns a correctly-typed non-finite value (`-Inf` or `NaN`)
+    instead. This is what makes it callable from inside a GPU kernel. Note that
+    *which* non-finite value you get is not part of the contract -- use
+    [`checkparams`](@ref), not `isnan`, to detect invalid parameters.
  3. **No validation in constructors.** See [`checkparams`](@ref).
 """
 abstract type AbstractProbabilityMeasure{F<:VariateForm,S<:ValueSupport} end

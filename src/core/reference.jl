@@ -3,7 +3,7 @@
 
 The measure that a density is taken with respect to.
 
-This package is *normalized-only*: [`logdensityof`](@ref) returns the finished
+This package is *normalized-only*: `logdensityof` returns the finished
 log-density with no base-measure recursion to unroll. But the reference still has to
 be recorded, because it is what a change of variables acts on and what makes a
 Radon--Nikodym derivative between two measures meaningful. Keeping it as a

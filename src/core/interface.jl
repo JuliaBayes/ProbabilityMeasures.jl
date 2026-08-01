@@ -30,13 +30,18 @@ a branch and an error path are not free. Validation is opt-in, at the boundaries
 where a human supplied the numbers.
 
 Invalid parameters are not silently wrong -- by invariant 2 of
-[`AbstractProbabilityMeasure`](@ref), `logdensityof` returns `NaN` for them.
+[`AbstractProbabilityMeasure`](@ref), `logdensityof` returns a non-finite value for
+them rather than throwing.
 
 ```julia
 d = Normal(0.0, -1.0)     # constructs fine, no error
 checkparams(d)            # false
 logdensityof(d, 0.0)      # NaN, not a DomainError
 ```
+
+This function is the sentinel, not `isnan(logdensityof(d, x))`. The two are not
+equivalent: `Normal(Inf, 1.0)` has invalid parameters but a log-density of `-Inf`,
+which `isnan` would wave through as a legitimate zero-density point.
 """
 checkparams(::AbstractProbabilityMeasure) = true
 

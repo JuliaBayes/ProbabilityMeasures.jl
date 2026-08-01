@@ -28,6 +28,7 @@ const UNIVARIATE_OPTIONALS = (
     Normal(0.0, 1.0), Normal(-2.5, 0.5), Normal(3.0f0, 2.0f0)
 ]
 
-# Hooks used by `test_totality` and `test_genericity`.
-_invalid(::Normal) = Normal(0.0, -1.0)
+# Hooks used by `test_totality` and `test_genericity`. Both an invalid scale (NaN)
+# and a non-finite location (-Inf) are covered, since they fail differently.
+_invalids(::Normal) = (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0))
 _exactparams(::Normal) = Normal(0, 1)
