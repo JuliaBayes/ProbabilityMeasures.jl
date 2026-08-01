@@ -9,20 +9,7 @@
   package -- Interfaces.jl is small enough that this would be a reasonable trade.
 =#
 
-const UNIVARIATE_OPTIONALS = (
-    :cdf,
-    :quantile,
-    :mean,
-    :var,
-    :std,
-    :median,
-    :mode,
-    :entropy,
-    :skewness,
-    :kurtosis,
-    :mgf,
-    :cf,
-)
+const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entropy)
 
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Normal [
     Normal(0.0, 1.0), Normal(-2.5, 0.5), Normal(3.0f0, 2.0f0)

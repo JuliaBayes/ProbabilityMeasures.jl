@@ -74,16 +74,13 @@ Base.rand(d::AbstractProbabilityMeasure) = rand(Random.default_rng(), d)
 
 # --- Moments and summaries ------------------------------------------------------
 #
-# `mean`, `var`, `std`, `median` and `quantile` are extended from Statistics; the
-# rest live in StatsBase, which is far too heavy a dependency for what amounts to
-# five function names, so they are defined here.
-
-"""
-    mode(d)
-
-The location of the maximum of the density of `d`.
-"""
-function mode end
+# `mean`, `var`, `std`, `median` and `quantile` are extended from Statistics.
+# `entropy` is the only new name, and it is here because it appears in every ELBO.
+#
+# `mode`, `skewness`, `kurtosis`, `mgf` and `cf` are deliberately absent. They are
+# Distributions.jl inheritance, not things a PPL calls, and each one this package
+# exports is a name a downstream PPL then depends on -- adding an export later is
+# non-breaking, removing one is not.
 
 """
     entropy(d)
@@ -91,21 +88,6 @@ function mode end
 The differential (or Shannon) entropy of `d`, in nats.
 """
 function entropy end
-
-"""
-    skewness(d)
-
-The standardized third central moment of `d`.
-"""
-function skewness end
-
-"""
-    kurtosis(d)
-
-The *excess* kurtosis of `d`: the standardized fourth central moment minus three,
-so that a normal measure has zero kurtosis.
-"""
-function kurtosis end
 
 """
     cdf(d, x)
@@ -136,24 +118,12 @@ function logcdf end
 """
 function logccdf end
 
-"""
-    mgf(d, t)
-
-The moment generating function ``E[e^{tX}]``.
-"""
-function mgf end
-
-"""
-    cf(d, t)
-
-The characteristic function ``E[e^{itX}]``.
-"""
-function cf end
-
 # Generic fallbacks. These are correct for any measure that defines the primitive
 # they delegate to, and each is accurate over the range where the primitive is.
 ccdf(d::UnivariateMeasure, x) = one(cdf(d, x)) - cdf(d, x)
 logcdf(d::UnivariateMeasure, x) = logt(cdf(d, x))
 logccdf(d::UnivariateMeasure, x) = logt(ccdf(d, x))
 Statistics.median(d::UnivariateMeasure) = quantile(d, 1//2)
-Statistics.std(d::AbstractProbabilityMeasure) = sqrtt(var(d))
+# Plain `sqrt`, not a total variant: a variance is non-negative by definition (the
+# interface asserts it), so this branch cannot throw for a conforming measure.
+Statistics.std(d::AbstractProbabilityMeasure) = sqrt(var(d))

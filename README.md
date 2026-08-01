@@ -80,6 +80,17 @@ Keeping it in `libs/` rather than in the package is deliberate: JET, AllocCheck,
 four AD backends, JLArrays and QuadGK stay out of the dependency graph, so a PPL
 that depends on this package stays cheap to load.
 
+## Scope
+
+The exported surface is kept deliberately small — every name is one a PPL is
+expected to call. Adding an export later is a non-breaking change and removing one
+is not, so anything speculative costs more to ship now than to withhold.
+
+Absent on purpose, and cheap to add when something needs them: `mode`, `skewness`,
+`kurtosis`, `mgf`, `cf` (Distributions.jl inheritance rather than inference);
+`Matrixvariate`; the `PositiveReals`/`UnitInterval`/`RealInterval` supports, which
+will arrive with the first measure that has one.
+
 ## Status
 
 Early. `Normal` is implemented and passes the conformance suite. Product and power

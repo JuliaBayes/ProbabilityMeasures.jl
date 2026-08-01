@@ -12,22 +12,9 @@ abstract type Support end
 "The whole real line, ``(-\\infty, \\infty)``."
 struct RealLine <: Support end
 
-"The positive reals, ``(0, \\infty)``."
-struct PositiveReals <: Support end
-
-"The unit interval ``[0, 1]``."
-struct UnitInterval <: Support end
-
-"""
-    RealInterval(lower, upper)
-
-A bounded interval ``[lower, upper]``. Unlike the singleton supports this carries
-values, so construct it with the measure's own parameter types to stay generic.
-"""
-struct RealInterval{L<:Real,U<:Real} <: Support
-    lower::L
-    upper::U
-end
+# `PositiveReals`, `UnitInterval` and a bounded `RealInterval` all belong here, and
+# will arrive with the first measure that needs one (Gamma, Beta, Uniform). Defining
+# them now would be guessing at their shape before anything constrains it.
 
 """
     support(d) -> Support
@@ -49,15 +36,6 @@ this. It exists for samplers, transforms, and validation.
 insupport(d::AbstractProbabilityMeasure, x) = insupport(support(d), x)
 
 insupport(::RealLine, x::Real) = isfinite(x)
-insupport(::PositiveReals, x::Real) = isfinite(x) && x > zero(x)
-insupport(::UnitInterval, x::Real) = zero(x) <= x <= one(x)
-insupport(s::RealInterval, x::Real) = s.lower <= x <= s.upper
 
 Base.minimum(::RealLine) = -Inf
 Base.maximum(::RealLine) = Inf
-Base.minimum(::PositiveReals) = 0.0
-Base.maximum(::PositiveReals) = Inf
-Base.minimum(::UnitInterval) = 0.0
-Base.maximum(::UnitInterval) = 1.0
-Base.minimum(s::RealInterval) = s.lower
-Base.maximum(s::RealInterval) = s.upper

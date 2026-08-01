@@ -52,12 +52,7 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
         var="var is non-negative" => d -> var(d) >= 0,
         std="std is the square root of var" => d -> std(d) ≈ sqrt(var(d)),
         median=d -> median(d) isa Real,
-        mode=d -> mode(d) isa Real,
         entropy=d -> entropy(d) isa Real,
-        skewness=d -> skewness(d) isa Real,
-        kurtosis=d -> kurtosis(d) isa Real,
-        mgf="mgf(d, 0) == 1" => d -> mgf(d, 0) ≈ 1,
-        cf="cf(d, 0) == 1" => d -> cf(d, 0) ≈ 1,
     ),
 ) """
 The interface of a normalized probability measure.

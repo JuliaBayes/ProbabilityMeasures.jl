@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning].
   GPU-shaped broadcast.
 - ForwardDiff package extension, so reparameterized sampling is differentiable.
 
+### Notes
+
+- The exported surface is intentionally minimal: every name is one a PPL is
+  expected to call. `mode`, `skewness`, `kurtosis`, `mgf`, `cf`, `Matrixvariate`,
+  `variateform`/`valuesupport`, and the unused supports are omitted rather than
+  shipped speculatively, since adding an export later is non-breaking and removing
+  one is not.
+
 <!-- Links -->
 
 [keep a changelog]: https://keepachangelog.com/en/1.1.0/

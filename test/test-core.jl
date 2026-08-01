@@ -1,12 +1,14 @@
 using ProbabilityMeasures
-using ProbabilityMeasures: logt, sqrtt, _promoted_paramtype
+using ProbabilityMeasures: logt, _promoted_paramtype
+using ProbabilityMeasures: UnivariateMeasure, ContinuousMeasure, DiscreteMeasure
 using ForwardDiff: ForwardDiff
 using Test
 
 @testset "traits" begin
     d = Normal(0.0, 1.0)
-    @test variateform(d) === Univariate
-    @test valuesupport(d) === Continuous
+    # There is no `variateform`/`valuesupport` accessor pair by design -- the type
+    # parameters are already on the type, and `isa` is the idiom.
+    @test d isa AbstractProbabilityMeasure{Univariate,Continuous}
     @test d isa ContinuousUnivariateMeasure
     @test d isa UnivariateMeasure
     @test d isa ContinuousMeasure
@@ -27,17 +29,8 @@ end
     @test !insupport(Normal(0.0, 1.0), Inf)
     @test !insupport(Normal(0.0, 1.0), NaN)
 
-    @test insupport(PositiveReals(), 1.0)
-    @test !insupport(PositiveReals(), 0.0)
-    @test insupport(UnitInterval(), 0.0)
-    @test insupport(UnitInterval(), 1.0)
-    @test !insupport(UnitInterval(), 1.5)
-
-    s = RealInterval(-1.0, 2.0)
-    @test insupport(s, 0.0)
-    @test !insupport(s, 3.0)
-    @test minimum(s) == -1.0
-    @test maximum(s) == 2.0
+    @test minimum(RealLine()) == -Inf
+    @test maximum(RealLine()) == Inf
 
     # Singleton supports carry no numeric payload, so they cannot pin a precision.
     @test isbits(RealLine())
@@ -50,12 +43,9 @@ end
     @test logt(0.0) == -Inf
     @test logt(1.0) == 0.0
     @test logt(-1.0f0) isa Float32
-    @test isnan(sqrtt(-1.0))
-    @test sqrtt(4.0) == 2.0
 
-    # Base throws on both of these; that is the behaviour being replaced.
+    # Base throws here; that is the behaviour being replaced.
     @test_throws DomainError log(-1.0)
-    @test_throws DomainError sqrt(-1.0)
 end
 
 @testset "basefloat strips AD tracking" begin

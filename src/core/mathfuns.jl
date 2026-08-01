@@ -12,14 +12,6 @@ throw, so only the negative branch needs handling.
 @inline logt(x::Real) = x < zero(x) ? oftype(float(x), NaN) : log(x)
 
 """
-    sqrtt(x)
-
-Total `sqrt`: returns `NaN` where `sqrt` would throw a `DomainError`. See
-[`logt`](@ref).
-"""
-@inline sqrtt(x::Real) = x < zero(x) ? oftype(float(x), NaN) : sqrt(x)
-
-"""
     basefloat(T) -> Type{<:AbstractFloat}
 
 The plain floating-point type underlying `T`, with any AD tracking removed.

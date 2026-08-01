@@ -1,8 +1,12 @@
 """
     VariateForm
 
-Trait describing the shape of a single draw from a measure: [`Univariate`](@ref),
-[`Multivariate`](@ref), or [`Matrixvariate`](@ref).
+Trait describing the shape of a single draw from a measure: [`Univariate`](@ref) or
+[`Multivariate`](@ref).
+
+There is deliberately no `Matrixvariate`. Adding a variate form later is a
+non-breaking change; shipping one that nothing implements is a guess that a
+downstream PPL then has to keep working.
 """
 abstract type VariateForm end
 
@@ -11,9 +15,6 @@ struct Univariate <: VariateForm end
 
 "Draws are vectors."
 struct Multivariate <: VariateForm end
-
-"Draws are matrices."
-struct Matrixvariate <: VariateForm end
 
 """
     ValueSupport
@@ -66,30 +67,20 @@ Three invariants are enforced by the conformance suite
 abstract type AbstractProbabilityMeasure{F<:VariateForm,S<:ValueSupport} end
 
 # Dispatch aliases. `AbstractProbabilityMeasure` is 28 characters, which pushes most
-# `<:` clauses past the 92-column margin; prefer these in signatures.
+# `<:` clauses past the 92-column margin.
+#
+# Only `ContinuousUnivariateMeasure` is exported -- it is what you subtype to write a
+# measure. The other three exist because the fallbacks in `interface.jl` and
+# `reference.jl` dispatch on them, and are reachable as
+# `ProbabilityMeasures.UnivariateMeasure` if you need them.
+#
+# There is no accessor pair (`variateform`/`valuesupport`) either: the parameters are
+# already on the type, and `d isa ContinuousMeasure` reads better than
+# `valuesupport(d) === Continuous` at every call site that would have used it.
 const UnivariateMeasure{S} = AbstractProbabilityMeasure{Univariate,S}
-const MultivariateMeasure{S} = AbstractProbabilityMeasure{Multivariate,S}
-const MatrixvariateMeasure{S} = AbstractProbabilityMeasure{Matrixvariate,S}
 const ContinuousMeasure{F} = AbstractProbabilityMeasure{F,Continuous}
 const DiscreteMeasure{F} = AbstractProbabilityMeasure{F,Discrete}
 const ContinuousUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Continuous}
-const DiscreteUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Discrete}
-
-"""
-    variateform(d) -> Type{<:VariateForm}
-
-The [`VariateForm`](@ref) of `d`.
-"""
-variateform(::Type{<:AbstractProbabilityMeasure{F}}) where {F} = F
-variateform(d::AbstractProbabilityMeasure) = variateform(typeof(d))
-
-"""
-    valuesupport(d) -> Type{<:ValueSupport}
-
-The [`ValueSupport`](@ref) of `d`.
-"""
-valuesupport(::Type{<:AbstractProbabilityMeasure{F,S}}) where {F,S} = S
-valuesupport(d::AbstractProbabilityMeasure) = valuesupport(typeof(d))
 
 # This single line is the whole batching story for univariate measures. Because
 # measures hold scalar, `isbits` parameters, `logdensityof.(d, xs)` over a device

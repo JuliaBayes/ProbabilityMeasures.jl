@@ -80,9 +80,6 @@ end
         @test var(d) ≈ Distributions.var(r)
         @test std(d) ≈ Distributions.std(r)
         @test entropy(d) ≈ Distributions.entropy(r)
-        @test mode(d) ≈ Distributions.mode(r)
-        @test mgf(d, 0.3) ≈ Distributions.mgf(r, 0.3)
-        @test cf(d, 0.3) ≈ Distributions.cf(r, 0.3)
     end
 end
 

@@ -101,9 +101,6 @@ Statistics.var(d::Normal) = d.σ^2
 # `sqrt(var(d))` for every valid scale.
 Statistics.std(d::Normal) = abs(d.σ)
 Statistics.median(d::Normal) = d.μ
-mode(d::Normal) = d.μ
-skewness(d::Normal) = zero(eltype(d))
-kurtosis(d::Normal) = zero(eltype(d))
 
 function entropy(d::Normal)
     σ = float(d.σ)
@@ -111,9 +108,6 @@ function entropy(d::Normal)
     # `Irrational` at `Float64` and cap a `BigFloat` result at 53 bits.
     return (log2π + one(σ)) / 2 + logt(σ)
 end
-
-mgf(d::Normal, t::Real) = exp(t * d.μ + (t * d.σ)^2 / 2)
-cf(d::Normal, t::Real) = exp(im * t * d.μ - (t * d.σ)^2 / 2)
 
 # --- Distribution function ------------------------------------------------------
 
