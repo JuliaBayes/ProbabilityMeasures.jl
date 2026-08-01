@@ -1,0 +1,4 @@
+# JuliaFormatter is configured with normalize_line_endings = "unix". Without this,
+# core.autocrlf on Windows rewrites checked-out files to CRLF and the formatter
+# rewrites them back to LF on every pre-commit run.
+* text=auto eol=lf

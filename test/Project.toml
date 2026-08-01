@@ -1,7 +1,14 @@
 [deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+ProbabilityMeasuresTest = "8c1f4a3e-27bd-4b0a-9f4d-6e2b1c5a7d90"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
 ProbabilityMeasures = {path = ".."}
+ProbabilityMeasuresTest = {path = "../libs/ProbabilityMeasuresTest"}
