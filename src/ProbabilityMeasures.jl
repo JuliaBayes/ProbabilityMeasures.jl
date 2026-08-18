@@ -13,7 +13,7 @@ module ProbabilityMeasures
 
 using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logtwo, sqrt2
-using LinearAlgebra: LowerTriangular
+using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfc, erfcinv, logerfc
 using Statistics: Statistics, cov, mean, median, quantile, std, var

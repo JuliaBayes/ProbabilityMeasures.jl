@@ -2,16 +2,29 @@ using ProbabilityMeasures
 using ProbabilityMeasuresTest: test_measure
 using Distributions: Distributions
 using ForwardDiff: ForwardDiff
-using LinearAlgebra: LowerTriangular, cholesky, diag
+using LinearAlgebra: Diagonal, I, LowerTriangular, cholesky, diag
 using QuadGK: quadgk
 using Random: Xoshiro
 using Test
 
 #=
   Distributions.jl is a test-only numerical reference. `MvNormal` is parameterized by
-  the Cholesky factor, so the reference takes `L * L'`.
+  the Cholesky factor, so the reference takes `L L'` as its covariance.
+
+  The factor is read entry by entry, and only its lower triangle, which is both what the
+  measure itself promises and the one spelling that covers a matrix, a `Diagonal` and a
+  `UniformScaling` alike: the last of these is not an array and does not broadcast.
 =#
-reference(m) = Distributions.MvNormal(float.(m.μ), float.(m.L * m.L'))
+function lowertriangle(m)
+    n = length(m.μ)
+    return [i >= j ? Float64(m.L[i, j]) : 0.0 for i in 1:n, j in 1:n]
+end
+
+function reference(m)
+    L = lowertriangle(m)
+    return Distributions.MvNormal(Float64.(m.μ), L * L')
+end
+
 reference_logpdf(m, x) = Distributions.logpdf(reference(m), collect(float.(x)))
 
 const CORRELATED = MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5])
@@ -22,6 +35,11 @@ const CORRELATED = MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5])
         CORRELATED,
         MvNormal(Float32[0.0, 1.0], Float32[1.0 0.0; -0.25 0.5]),
         MvNormal([0, 0, 0], [2 0 0; 1 2 0; 0 1 2]),
+        # The structured factors take their own paths through every one of these blocks.
+        MvNormal([1.0, -2.0], Diagonal([2.0, 1.5])),
+        MvNormal(Float32[0.0, 1.0], Diagonal(Float32[0.5, 2.0])),
+        MvNormal([1.0, -2.0], 1.5 * I),
+        MvNormal([0, 0, 0], 2 * I),
     )
     for (i, d) in enumerate(ds)
         test_measure(d; name="MvNormal $i", reference_logpdf=reference_logpdf)
@@ -94,6 +112,78 @@ end
         @test std(d) ≈ sqrt.(diag(Distributions.cov(r)))
         @test entropy(d) ≈ Distributions.entropy(r)
     end
+end
+
+#=
+  The structured factors are an optimization, so the thing to test is that they change
+  nothing observable. Each is compared against the same measure written as a full matrix,
+  which takes the general path.
+=#
+@testset "structured factors agree with the general path" begin
+    μ = [1.0, -2.0]
+    pairs = (
+        (MvNormal(μ, Diagonal([2.0, 1.5])), MvNormal(μ, [2.0 0.0; 0.0 1.5])),
+        (MvNormal(μ, 1.5 * I), MvNormal(μ, [1.5 0.0; 0.0 1.5])),
+    )
+    for (structured, full) in pairs
+        for x in ([0.0, 0.0], [0.3, -1.0], mean(structured), [-4.0, 7.5])
+            @test logdensityof(structured, x) == logdensityof(full, x)
+            @test densityof(structured, x) == densityof(full, x)
+        end
+        @test cov(structured) == cov(full)
+        @test var(structured) == var(full)
+        @test std(structured) == std(full)
+        @test mean(structured) == mean(full)
+        @test entropy(structured) ≈ entropy(full)
+        @test checkparams(structured) == checkparams(full)
+        @test support(structured) === support(full)
+        # Same reparameterization, so the same seed gives the same draw.
+        @test rand(Xoshiro(1), structured) == rand(Xoshiro(1), full)
+        # And the same totality in the shape of the argument.
+        @test isnan(logdensityof(structured, [0.5]))
+    end
+
+    #=
+      A structured factor has its own `checkparams` and its own whitening, so it needs its
+      own invalid cases: a zero diagonal entry divides by zero, a negative one takes the
+      log of a negative number.
+    =#
+    for bad in (
+        MvNormal(μ, Diagonal([0.0, 1.5])),
+        MvNormal(μ, Diagonal([-1.0, 1.5])),
+        MvNormal(μ, 0.0 * I),
+        MvNormal(μ, -1.5 * I),
+        MvNormal(μ, Diagonal([1.0, 1.0, 1.0])),
+        MvNormal([Inf, 0.0], 1.5 * I),
+    )
+        @test !checkparams(bad)
+        @test !isfinite(logdensityof(bad, [0.5, 0.5]))
+    end
+end
+
+@testset "structured factors keep their structure" begin
+    diagonal = MvNormal([1.0, -2.0], Diagonal([2.0, 1.5]))
+    isotropic = MvNormal([1.0, -2.0], 1.5 * I)
+
+    # A structured factor squares to a structured covariance rather than a dense one.
+    @test cov(diagonal) isa Diagonal
+    @test cov(isotropic) isa Diagonal
+
+    #=
+      An isotropic factor carries no dimension, so `n` comes from `μ`, and it is `isbits`
+      where a matrix-backed factor is not.
+    =#
+    @test support(isotropic) === RealVectors(2)
+    @test isbits(isotropic.L)
+    @test !isbits(MvNormal([1.0, -2.0], [1.5 0.0; 0.0 1.5]).L)
+
+    #=
+      The second argument is the factor, so these are standard deviations. Distributions.jl
+      spells the same measure with a variance.
+    =#
+    @test var(isotropic) ≈ fill(1.5^2, 2)
+    @test var(diagonal) ≈ [2.0^2, 1.5^2]
+    @test cov(isotropic) ≈ Distributions.cov(Distributions.MvNormal([1.0, -2.0], 1.5^2 * I))
 end
 
 @testset "a covariance is factored once by the caller" begin

@@ -1,4 +1,12 @@
 """
+    MvNormalFactor
+
+The factor types [`MvNormal`](@ref) accepts: any matrix, or a `UniformScaling`, which is
+not one because it carries no size of its own.
+"""
+const MvNormalFactor = Union{AbstractMatrix{<:Number},UniformScaling{<:Number}}
+
+"""
     MvNormal(μ, L)
 
 The multivariate normal (Gaussian) measure on ``\\mathbb{R}^n`` with mean `μ` and
@@ -14,8 +22,9 @@ with respect to Lebesgue measure on ``\\mathbb{R}^n``. Draws are `Vector`s.
 # Arguments
 
   - `μ::AbstractVector{<:Number}`: the mean.
-  - `L::AbstractMatrix{<:Number}`: the lower-triangular Cholesky factor of the
-    covariance. Only its lower triangle is read, as with `LinearAlgebra.LowerTriangular`.
+  - `L`: the lower-triangular Cholesky factor of the covariance, as a matrix, a
+    `LinearAlgebra.Diagonal`, or a `LinearAlgebra.UniformScaling`. Only the lower
+    triangle of a matrix is read, as with `LinearAlgebra.LowerTriangular`.
 
 The `Number` element bound permits numeric wrappers used by AD and tracing systems.
 
@@ -33,6 +42,29 @@ MvNormal(μ, Matrix(cholesky(Σ).L))
 
 There is no `cdf`, `quantile` or `median`: none of them has a closed form in more than
 one dimension.
+
+# Structured factors
+
+A `Diagonal` or `UniformScaling` factor takes a shorter path. Whitening a general factor
+is a forward substitution, ``O(n^2)`` and sequential; a diagonal one is a single
+elementwise division. Nothing else changes: the same measure, computed more cheaply.
+
+```julia
+using LinearAlgebra
+
+MvNormal(μ, L)                # general, one triangular solve per density evaluation
+MvNormal(μ, Diagonal(σ))      # independent coordinates, σ their standard deviations
+MvNormal(μ, σ * I)            # isotropic, σ the common standard deviation
+```
+
+!!! warning
+    The second argument is always the *factor*, so a structured one carries standard
+    deviations. Distributions.jl spells its structured cases with the *covariance*, as
+    `MvNormal(μ, σ² * I)`. Take a square root when porting.
+
+A `UniformScaling` carries no dimension, so the isotropic form takes ``n`` from `μ`.
+Both structured factors are `isbits`, so an isotropic measure over a statically sized
+mean is capturable by a device kernel where a matrix-backed one is not.
 
 Unlike the univariate measures, `logdensityof` allocates. Whitening ``x - \\mu`` needs
 a temporary, written so that reverse-mode AD can differentiate it, and a draw has to
@@ -56,7 +88,7 @@ error.
 isnan(logdensityof(MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]), [0.0]))  # true
 ```
 """
-struct MvNormal{V<:AbstractVector{<:Number},F<:AbstractMatrix{<:Number}} <:
+struct MvNormal{V<:AbstractVector{<:Number},F<:MvNormalFactor} <:
        ContinuousMultivariateMeasure
     μ::V
     L::F
@@ -68,11 +100,83 @@ end
 =#
 
 #=
+  A structured factor is not a different measure, only a cheaper one, so it dispatches on
+  the field type rather than getting a type of its own. These aliases name the two cases
+  the methods below specialize on.
+
+  The mean is bound to the struct's own parameter bound rather than left free. An alias
+  with an unbounded parameter is not a strict subtype of the general signature, and the
+  specializations would be ambiguous with it instead of narrower.
+=#
+const DiagMvNormal = MvNormal{<:AbstractVector{<:Number},<:Diagonal}
+const IsoMvNormal = MvNormal{<:AbstractVector{<:Number},<:UniformScaling}
+
+#=
   A draw is a `Vector`, whatever container the parameters use: it is built from scalar
   arithmetic over the entries of `μ` and `L`.
 =#
 function Base.eltype(::Type{MvNormal{V,F}}) where {V,F}
     return Vector{float(promote_type(eltype(V), eltype(F)))}
+end
+
+"""
+    shapesmatch(d::MvNormal, x) -> Bool
+
+Whether `x` and the factor both line up with `μ`.
+
+A branch on this is a branch on shape, not on a value: shapes are static even under
+tracing. A `UniformScaling` takes its dimension from `μ`, so there is nothing to check
+but `x`.
+"""
+@inline function shapesmatch(d::MvNormal, x::AbstractVector)
+    n = length(d.μ)
+    return (length(x) == n) & (n >= 1) & (size(d.L, 1) == n) & (size(d.L, 2) == n)
+end
+
+@inline function shapesmatch(d::DiagMvNormal, x::AbstractVector)
+    n = length(d.μ)
+    return (length(x) == n) & (n >= 1) & (length(d.L.diag) == n)
+end
+
+@inline function shapesmatch(d::IsoMvNormal, x::AbstractVector)
+    n = length(d.μ)
+    return (length(x) == n) & (n >= 1)
+end
+
+"""
+    logdetfactor(d::MvNormal, ::Type{T}) -> T
+
+``\\log \\det L``, the sum of the logs of the diagonal, accumulated in `T`.
+
+Taking `T` from the caller keeps an exact factor from capping the term at `Float64` when
+the argument is wider, as `Normal` does with `σ`. `logt` keeps a non-positive diagonal
+from throwing. The isotropic case is ``n \\log \\lambda`` and needs no loop.
+"""
+function logdetfactor(d::MvNormal, ::Type{T}) where {T}
+    acc = zero(T)
+    for i in 1:length(d.μ)
+        acc += logt(convert(T, d.L[i, i]))
+    end
+    return acc
+end
+
+#=
+  This one is about differentiability, not speed: indexing a `Diagonal` is already `O(1)`,
+  but Zygote's adjoint for it produces a structural cotangent, a `NamedTuple`, that it
+  cannot then add back to the `Diagonal`. Reading the stored vector keeps the whole
+  log-density inside plain array arithmetic. Every other structured method reaches for the
+  same field, so this is the only place the general path leaked through.
+=#
+function logdetfactor(d::DiagMvNormal, ::Type{T}) where {T}
+    acc = zero(T)
+    for σ in d.L.diag
+        acc += logt(convert(T, σ))
+    end
+    return acc
+end
+
+function logdetfactor(d::IsoMvNormal, ::Type{T}) where {T}
+    return length(d.μ) * logt(convert(T, d.L.λ))
 end
 
 #=
@@ -92,6 +196,25 @@ function checkparams(d::MvNormal)
         end
     end
     return ok
+end
+
+#=
+  A structured factor has only a diagonal to check, so this skips the `O(n²)` sweep over
+  off-diagonal zeros that the general method would do.
+=#
+function checkparams(d::DiagMvNormal)
+    n = length(d.μ)
+    (n >= 1) & (length(d.L.diag) == n) || return false
+    ok = all(isfinite, d.μ)
+    for σ in d.L.diag
+        ok &= isfinite(σ) & (σ > zero(σ))
+    end
+    return ok
+end
+
+function checkparams(d::IsoMvNormal)
+    λ = d.L.λ
+    return (length(d.μ) >= 1) & all(isfinite, d.μ) & isfinite(λ) & (λ > zero(λ))
 end
 
 support(d::MvNormal) = RealVectors(length(d.μ))
@@ -140,6 +263,14 @@ function whiten(d::MvNormal, x::AbstractVector{<:Number})
     return z
 end
 
+#=
+  A diagonal factor decouples the coordinates, so the substitution collapses to one
+  elementwise division: `O(n)` in one allocation, and a broadcast every reverse-mode
+  backend already differentiates.
+=#
+whiten(d::DiagMvNormal, x::AbstractVector{<:Number}) = (x .- d.μ) ./ d.L.diag
+whiten(d::IsoMvNormal, x::AbstractVector{<:Number}) = (x .- d.μ) ./ d.L.λ
+
 """
     unwhiten(d::MvNormal, z)
 
@@ -148,6 +279,9 @@ The inverse of [`whiten`](@ref): ``\\mu + L z``.
 function unwhiten(d::MvNormal, z::AbstractVector{<:Number})
     return map(i -> d.μ[i] + rowdot(d.L, z, i, i), 1:length(d.μ))
 end
+
+unwhiten(d::DiagMvNormal, z::AbstractVector{<:Number}) = d.μ .+ d.L.diag .* z
+unwhiten(d::IsoMvNormal, z::AbstractVector{<:Number}) = d.μ .+ d.L.λ .* z
 
 #=
   The result type the promotion invariant asks for. `logdensityof` reads it off its own
@@ -158,25 +292,11 @@ end
 end
 
 function DensityInterface.logdensityof(d::MvNormal, x::AbstractVector{<:Number})
-    n = length(d.μ)
-    #=
-      A branch on shape, not on a value: shapes are static even under tracing, and a
-      mismatched one has no density to return.
-    =#
-    if (length(x) != n) | (n < 1) | (size(d.L, 1) != n) | (size(d.L, 2) != n)
-        return convert(_densitytype(d, x), NaN)
-    end
+    # A mismatched shape has no density to return.
+    shapesmatch(d, x) || return convert(_densitytype(d, x), NaN)
     q = sum(abs2, whiten(d, x))
-    #=
-      Convert the diagonal to the promoted type before taking its log, as `Normal` does
-      with `σ`. An exact factor paired with a `BigFloat` argument would otherwise cap
-      this term, and `log2π`, at `Float64`.
-    =#
-    logdetL = zero(q)
-    for i in 1:n
-        logdetL += logt(oftype(q, d.L[i, i]))
-    end
-    return -(q + n * oftype(q, log2π)) / 2 - logdetL
+    n = length(d.μ)
+    return -(q + n * oftype(q, log2π)) / 2 - logdetfactor(d, typeof(q))
 end
 
 #=
@@ -192,17 +312,30 @@ Statistics.mean(d::MvNormal) = d.μ
 Statistics.cov(d::MvNormal) = (F=LowerTriangular(d.L); F * F')
 
 #=
+  A structured factor squares to a structured covariance, so say so in the type rather
+  than materializing a matrix of zeros.
+=#
+Statistics.cov(d::DiagMvNormal) = Diagonal(abs2.(d.L.diag))
+Statistics.cov(d::IsoMvNormal) = Diagonal(fill(abs2(d.L.λ), length(d.μ)))
+
+#=
   The marginal variances, the diagonal of `cov(d)`, without forming the matrix. `std` is
   elementwise: these are marginals, not a matrix to take a square root of.
 =#
 Statistics.var(d::MvNormal) = map(i -> sum(j -> abs2(d.L[i, j]), 1:i), 1:length(d.μ))
+Statistics.var(d::DiagMvNormal) = abs2.(d.L.diag)
+Statistics.var(d::IsoMvNormal) = fill(abs2(d.L.λ), length(d.μ))
+
 Statistics.std(d::MvNormal) = sqrt.(var(d))
 
 function entropy(d::MvNormal)
-    logdetL = sum(i -> logt(float(d.L[i, i])), 1:length(d.μ))
+    logdetL = logdetfactor(d, float(_elparamtype(d)))
     # `one(logdetL)`, not `1`: `log2π + 1` would evaluate the `Irrational` at Float64.
     return length(d.μ) * (log2π + one(logdetL)) / 2 + logdetL
 end
+
+# The scalar type the parameters promote to, which is what a summary is computed in.
+@inline _elparamtype(d::MvNormal) = promote_type(eltype(d.μ), eltype(d.L))
 
 function Base.show(io::IO, d::MvNormal)
     return print(io, "MvNormal(μ=", d.μ, ", L=", d.L, ")")

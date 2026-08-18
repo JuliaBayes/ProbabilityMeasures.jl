@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning].
   triangular solve instead of a factorization per evaluation. `cov` joins the
   re-exported summaries; there is no `cdf`, `quantile` or `median`, none of which has a
   closed form in more than one dimension.
+- Fast paths for a `Diagonal` or `UniformScaling` factor, dispatched on the field type
+  rather than given a measure type of their own. Whitening a general factor is an
+  ``O(n^2)`` forward substitution; a structured one is a single elementwise division,
+  and `checkparams` drops its sweep over off-diagonal zeros. A `UniformScaling` factor
+  carries no dimension, taking ``n`` from `μ`, and is `isbits`.
+
+  Both are the *factor*, so they carry standard deviations: `MvNormal(μ, σ * I)` is
+  Distributions.jl's `MvNormal(μ, σ² * I)`. That divergence is the price of one
+  consistent rule across all three forms, and it is called out in the docstring.
 - `libs/ProbabilityMeasuresTest`: a reusable conformance suite (`test_measure`)
   covering interface conformance, totality, type genericity, type stability,
   zero allocations, normalization, cdf/quantile, moments, four AD backends, and

@@ -46,6 +46,21 @@ _unflatten(θ::AbstractArray, p, offset::Int) = reshape(p[_range(θ, offset)], s
 
 _range(θ, offset::Int) = offset:(offset + length(θ) - 1)
 
+#=
+  A structured parameter carries fewer numbers than its shape suggests, and rebuilding it
+  has to put the structure back: flattening a `Diagonal` through the `AbstractArray`
+  method above would hand the AD blocks `n²` entries, most of them a constant zero, and
+  unflattening would return a dense matrix, quietly moving the measure off the very code
+  path under test. A `UniformScaling` is not an `AbstractArray` at all.
+=#
+_flatten(θ::Diagonal) = _flatten(θ.diag)
+_paramlength(θ::Diagonal) = length(θ.diag)
+_unflatten(θ::Diagonal, p, offset::Int) = Diagonal(p[_range(θ.diag, offset)])
+
+_flatten(θ::UniformScaling) = [float(θ.λ)]
+_paramlength(::UniformScaling) = 1
+_unflatten(::UniformScaling, p, offset::Int) = p[offset] * I
+
 "Where each parameter of `d` starts in `_paramvec(d)`."
 function _paramoffsets(d)
     lengths = map(_paramlength, values(params(d)))
@@ -75,6 +90,7 @@ _withtype(d, ::Type{T}) where {T} = _reconstruct(d, map(T, _paramvec(d)))
 =#
 _aspoint(x::Number, ::Type{T}) where {T} = T(x)
 _aspoint(x::AbstractArray, ::Type{T}) where {T} = T.(x)
+_aspoint(x::UniformScaling, ::Type{T}) where {T} = T(x.λ) * I
 
 #=
   The scalar type inside a draw. `eltype` of a number type is that type, so this is

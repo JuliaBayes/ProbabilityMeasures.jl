@@ -72,6 +72,8 @@ const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
     MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
     MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5]),
     MvNormal(Float32[0.0, 1.0], Float32[1.0 0.0; -0.25 0.5]),
+    MvNormal([1.0, -2.0], Diagonal([2.0, 1.5])),
+    MvNormal([1.0, -2.0], 1.5 * I),
 ]
 
 #=
@@ -97,6 +99,32 @@ end
 _identity(::Type{T}, n::Int) where {T} = T[i == j for i in 1:n, j in 1:n]
 
 #=
+  The same three defects, keeping the factor's structure. A structured measure has its own
+  `checkparams` and its own whitening, so these have to reach those methods rather than
+  the general ones a full matrix would dispatch to.
+=#
+function _invalids(d::DiagMvNormal)
+    n, T = length(d.μ), _elscalar(d)
+    singular, flipped = ones(T, n), ones(T, n)
+    singular[1] = 0
+    flipped[1] = -1
+    return (
+        MvNormal(zeros(T, n), Diagonal(singular)),
+        MvNormal(zeros(T, n), Diagonal(flipped)),
+        MvNormal(fill(T(Inf), n), Diagonal(ones(T, n))),
+    )
+end
+
+function _invalids(d::IsoMvNormal)
+    n, T = length(d.μ), _elscalar(d)
+    return (
+        MvNormal(zeros(T, n), zero(T) * I),
+        MvNormal(zeros(T, n), -one(T) * I),
+        MvNormal(fill(T(Inf), n), one(T) * I),
+    )
+end
+
+#=
   A factor of two on the diagonal rather than the identity: a unit diagonal has
   `log(1) == 0`, which would let a `Float64` intermediate through the precision check.
 =#
@@ -104,6 +132,13 @@ function _exactparams(d::MvNormal)
     n = length(d.μ)
     return MvNormal(zeros(Int, n), [i == j ? 2 : Int(i > j) for i in 1:n, j in 1:n])
 end
+
+function _exactparams(d::DiagMvNormal)
+    n = length(d.μ)
+    return MvNormal(zeros(Int, n), Diagonal(fill(2, n)))
+end
+
+_exactparams(d::IsoMvNormal) = MvNormal(zeros(Int, length(d.μ)), 2 * I)
 
 #=
   Vectors at fixed radii in whitened coordinates, mapped back through `L`, plus a

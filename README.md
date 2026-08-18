@@ -90,6 +90,21 @@ the diagonal of `cov` and its elementwise square root. There is no `cdf`, `quant
 `median`: none of them has a closed form in more than one dimension. Its `logdensityof`
 also allocates, where the univariate measures' do not.
 
+A `Diagonal` or `UniformScaling` factor takes a shorter path. Whitening a general factor
+is a forward substitution, `O(n²)` and sequential; a diagonal one is a single elementwise
+division. The measure is the same, only cheaper, and a `UniformScaling` factor is
+`isbits`.
+
+```julia
+MvNormal(μ, L)                # general
+MvNormal(μ, Diagonal(σ))      # independent coordinates, σ their standard deviations
+MvNormal(μ, σ * I)            # isotropic, σ the common standard deviation
+```
+
+The second argument is always the *factor*, so a structured one carries standard
+deviations. Distributions.jl spells its structured cases with the *covariance*, as
+`MvNormal(μ, σ² * I)`, so take a square root when porting.
+
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
 
