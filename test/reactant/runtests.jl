@@ -25,7 +25,7 @@ using Test
     @test Base.get_extension(ProbabilityMeasures, :ProbabilityMeasuresReactantExt) !==
         nothing
 
-    for d in (Normal(0.0, 1.0), Normal(-2.5, 0.5))
+    for d in (Normal(0.0, 1.0), Normal(-2.5, 0.5), Uniform(-1.0, 2.0))
         test_reactant(d, default_testpoints(d))
     end
 

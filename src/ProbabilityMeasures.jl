@@ -25,6 +25,7 @@ include("core/interface.jl")
 
 include("univariate/continuous/normal.jl")
 include("univariate/continuous/exponential.jl")
+include("univariate/continuous/uniform.jl")
 
 #=
   Keep exports to operations needed by PPLs. More distribution summaries, support
@@ -38,7 +39,7 @@ export ValueSupport, Continuous, Discrete
 export ContinuousUnivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, support, insupport
+export Support, RealLine, NonNegativeReals, RealInterval, support, insupport
 
 # Interface
 export checkparams, noisetype, basefloat
@@ -55,5 +56,6 @@ export mean, var, std, median, quantile
 # Measures
 export Normal
 export Exponential
+export Uniform
 
 end

@@ -29,6 +29,20 @@ end
     # Singleton supports carry no numeric payload, so they cannot pin a precision.
     @test isbits(RealLine())
     @test sizeof(RealLine()) == 0
+
+    #=
+      `RealInterval` is the exception: its endpoints come from the measure, so it keeps
+      their types rather than promoting them.
+    =#
+    s = RealInterval(-1.0f0, 2)
+    @test s isa RealInterval{Float32,Int}
+    @test minimum(s) === -1.0f0
+    @test maximum(s) === 2
+    @test insupport(s, 0.0)
+    @test insupport(s, -1.0f0)
+    @test !insupport(s, 2.5)
+    @test !insupport(s, Inf)
+    @test isbits(s)
 end
 
 @testset "total math functions" begin

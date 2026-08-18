@@ -250,10 +250,22 @@ end
 # Correctness.
 
 function test_normalization(d)
-    s = support(d)
-    total, err = quadgk(x -> densityof(d, x), minimum(s), maximum(s); rtol=1e-10)
+    lo, hi = _quadlimits(d)
+    total, err = quadgk(x -> densityof(d, x), lo, hi; rtol=1e-10)
     @test total ≈ 1 atol = max(1e-8, 10err)
 end
+
+#=
+  The endpoints of the support, widened to at least `Float64`. A measure whose support
+  carries its own endpoints hands back the parameter type, and a `Float32` interval
+  would ask QuadGK for an `rtol` it cannot reach.
+=#
+function _quadlimits(d)
+    s = support(d)
+    return _widen(minimum(s)), _widen(maximum(s))
+end
+
+_widen(x) = convert(promote_type(typeof(float(x)), Float64), x)
 
 function test_cdf(d, xs)
     for x in xs
@@ -271,10 +283,12 @@ function test_cdf(d, xs)
 
     #=
       `logcdf` exists because `cdf` underflows to zero far out in the tail, where the
-      log-scale value is still finite.
+      log-scale value is still finite. On a bounded support the deep quantile can round
+      onto the lower endpoint, where the cdf really is zero and `-Inf` is the answer, so
+      only check strictly inside the support.
     =#
     deep = float(quantile(d, 1e-300))
-    if isfinite(deep)
+    if isfinite(deep) && deep > minimum(support(d))
         @test isfinite(logcdf(d, deep))
     end
 
@@ -317,8 +331,8 @@ function test_cdf(d, xs)
       `test_normalization`.
     =#
     if _can_integrate(d)
-        lo = minimum(support(d))
-        x = float(quantile(d, 0.3))
+        lo = first(_quadlimits(d))
+        x = _widen(quantile(d, 0.3))
         integral, _ = quadgk(t -> densityof(d, t), lo, x; rtol=1e-10)
         @test integral ≈ cdf(d, x) rtol = 1e-6
     end
