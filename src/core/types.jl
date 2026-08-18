@@ -73,13 +73,15 @@ these, and they must hold:
 abstract type AbstractProbabilityMeasure{F<:VariateForm,S<:ValueSupport} end
 
 #=
-  Dispatch aliases used by measure implementations and interface fallbacks. Only
-  `ContinuousUnivariateMeasure` is exported.
+  Dispatch aliases used by measure implementations and interface fallbacks. Only the
+  two a measure declares itself a subtype of are exported.
 =#
 const UnivariateMeasure{S} = AbstractProbabilityMeasure{Univariate,S}
+const MultivariateMeasure{S} = AbstractProbabilityMeasure{Multivariate,S}
 const ContinuousMeasure{F} = AbstractProbabilityMeasure{F,Continuous}
 const DiscreteMeasure{F} = AbstractProbabilityMeasure{F,Discrete}
 const ContinuousUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Continuous}
+const ContinuousMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Continuous}
 
 #=
   Treat measures as scalars during broadcast. Device broadcasts can then capture an

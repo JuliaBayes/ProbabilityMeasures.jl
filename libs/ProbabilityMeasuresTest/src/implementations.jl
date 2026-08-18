@@ -59,3 +59,76 @@ _exactparams(::Uniform) = Uniform(-1, 2)
 function default_testpoints(d::Uniform)
     return [float(quantile(d, p)) for p in (0.1, 0.25, 0.5, 0.75, 0.9)]
 end
+
+#=
+  `MvNormal` declares the multivariate summaries. The scalar `mean`, `var`, `std` and
+  `median` components, and the distribution function, have no multivariate form; the
+  blocks of `test_measure` written around a scalar draw skip it too, and
+  `test/test-mvnormal.jl` covers what they would have.
+=#
+const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
+
+@implements MeasureInterface{MULTIVARIATE_OPTIONALS} MvNormal [
+    MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]),
+    MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5]),
+    MvNormal(Float32[0.0, 1.0], Float32[1.0 0.0; -0.25 0.5]),
+]
+
+#=
+  Hooks used by `test_totality` and `test_genericity`. Every instance matches the
+  dimension of `d`, since they are evaluated at `d`'s test points.
+
+  A zero and a negative diagonal entry both fail `checkparams` and fail differently: the
+  first divides by zero in the solve, the second takes the log of a negative number. A
+  non-finite mean fails with the factor intact.
+=#
+function _invalids(d::MvNormal)
+    n, T = length(d.μ), _elscalar(d)
+    singular, flipped = _identity(T, n), _identity(T, n)
+    singular[1, 1] = 0
+    flipped[1, 1] = -1
+    return (
+        MvNormal(zeros(T, n), singular),
+        MvNormal(zeros(T, n), flipped),
+        MvNormal(fill(T(Inf), n), _identity(T, n)),
+    )
+end
+
+_identity(::Type{T}, n::Int) where {T} = T[i == j for i in 1:n, j in 1:n]
+
+#=
+  A factor of two on the diagonal rather than the identity: a unit diagonal has
+  `log(1) == 0`, which would let a `Float64` intermediate through the precision check.
+=#
+function _exactparams(d::MvNormal)
+    n = length(d.μ)
+    return MvNormal(zeros(Int, n), [i == j ? 2 : Int(i > j) for i in 1:n, j in 1:n])
+end
+
+#=
+  Vectors at fixed radii in whitened coordinates, mapped back through `L`, plus a
+  wrongly-shaped argument for the totality checks: `logdensityof` is total in the shape
+  of its argument as well as its value.
+=#
+function default_testpoints(d::MvNormal)
+    #=
+      The radii take the measure's own precision, as `float(quantile(d, p))` does for a
+      univariate measure. A `Float64` point against `Float32` parameters would leave
+      ReverseDiff holding two tracked types at once, which its scalar `*` cannot resolve.
+    =#
+    n, T = length(d.μ), _elscalar(d)
+    return [unwhiten(d, [isodd(i) ? T(s) : -T(s) for i in 1:n]) for s in (0.75, 0.0, 2.5)]
+end
+
+function _extremepoints(d::MvNormal)
+    n = length(d.μ)
+    return (
+        fill(Inf, n),
+        fill(-Inf, n),
+        fill(NaN, n),
+        fill(floatmax(Float64), n),
+        zeros(n),
+        zeros(n + 1),
+        Float64[],
+    )
+end

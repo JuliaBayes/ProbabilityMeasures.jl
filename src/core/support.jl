@@ -65,3 +65,26 @@ insupport(s::RealInterval, x::Number) = isfinite(x) & (x >= s.a) & (x <= s.b)
 
 Base.minimum(s::RealInterval) = s.a
 Base.maximum(s::RealInterval) = s.b
+
+"""
+    RealVectors(n)
+
+The real vectors of length `n`, ``\\mathbb{R}^n``.
+
+The dimension is a payload, so this is not a singleton, but an `Int` cannot pin a
+numeric precision the way `RealInterval`'s endpoints can.
+
+There is no `minimum` or `maximum`: the endpoints exist to bound one-dimensional
+quadrature, and ``\\mathbb{R}^n`` has none to give.
+"""
+struct RealVectors <: Support
+    n::Int
+end
+
+#=
+  The length test comes first but `&` evaluates both sides, so `all` has to be safe on
+  a vector of the wrong length. It is.
+=#
+function insupport(s::RealVectors, x::AbstractVector{<:Number})
+    return (length(x) == s.n) & all(isfinite, x)
+end

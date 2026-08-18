@@ -12,10 +12,17 @@ and this project adheres to [Semantic Versioning].
 - `AbstractProbabilityMeasure{F,S}` and the normalized-only measure interface:
   `logdensityof`, `rand`, `support`, `insupport`, `params`, `checkparams`, and the
   moment/distribution-function surface.
-- The `RealLine`, `NonNegativeReals` and `RealInterval` supports. `PositiveReals`
-  and `UnitInterval` will arrive with the first measure that needs one.
+- The `RealLine`, `NonNegativeReals`, `RealInterval` and `RealVectors` supports.
+  `PositiveReals` and `UnitInterval` will arrive with the first measure that needs one.
 - `Normal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with heterogeneous
   parameter types and no promotion or validation at construction.
+- `MvNormal(μ, L)`, the first multivariate measure, with the
+  `ContinuousMultivariateMeasure` alias it dispatches on. It is parameterized by the
+  Cholesky factor rather than the covariance, which makes the reparameterized draw
+  `μ + L z` plain arithmetic in the parameters and leaves the log-density one
+  triangular solve instead of a factorization per evaluation. `cov` joins the
+  re-exported summaries; there is no `cdf`, `quantile` or `median`, none of which has a
+  closed form in more than one dimension.
 - `libs/ProbabilityMeasuresTest`: a reusable conformance suite (`test_measure`)
   covering interface conformance, totality, type genericity, type stability,
   zero allocations, normalization, cdf/quantile, moments, four AD backends, and
@@ -24,6 +31,15 @@ and this project adheres to [Semantic Versioning].
 
 ### Notes
 
+- The conformance suite's allocation, moment and GPU-broadcast blocks are written
+  around a scalar draw and now run only for univariate measures, and its `isbits`
+  requirement only for a measure whose parameters are all scalars. A measure the
+  defaults skip is still checked, in its own test file: `test/test-mvnormal.jl`
+  carries a two-dimensional quadrature for normalization, a Monte Carlo check of the
+  mean and covariance, and a bound on what the density allocates.
+- `MvNormal`'s `logdensityof` allocates, unlike the univariate measures'. Whitening
+  needs a temporary, grown by `vcat` so that reverse-mode backends, which reject array
+  mutation, can differentiate it.
 - The exported surface is intentionally minimal: every name is one a PPL is
   expected to call. `mode`, `skewness`, `kurtosis`, `mgf`, `cf`, `Matrixvariate`,
   `variateform`/`valuesupport`, and the unused supports are omitted rather than

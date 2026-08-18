@@ -13,9 +13,10 @@ module ProbabilityMeasures
 
 using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logtwo, sqrt2
+using LinearAlgebra: LowerTriangular
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfc, erfcinv, logerfc
-using Statistics: Statistics, mean, median, quantile, std, var
+using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 
 include("core/types.jl")
@@ -27,6 +28,8 @@ include("univariate/continuous/normal.jl")
 include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 
+include("multivariate/continuous/mvnormal.jl")
+
 #=
   Keep exports to operations needed by PPLs. More distribution summaries, support
   types, and transform traits can be added when an implementation needs them.
@@ -36,10 +39,10 @@ include("univariate/continuous/uniform.jl")
 export AbstractProbabilityMeasure
 export VariateForm, Univariate, Multivariate
 export ValueSupport, Continuous, Discrete
-export ContinuousUnivariateMeasure
+export ContinuousUnivariateMeasure, ContinuousMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, support, insupport
+export Support, RealLine, NonNegativeReals, RealInterval, RealVectors, support, insupport
 
 # Interface
 export checkparams, noisetype, basefloat
@@ -51,11 +54,12 @@ export cdf, ccdf, logcdf, logccdf, entropy
 =#
 export logdensityof, densityof
 export params
-export mean, var, std, median, quantile
+export mean, var, std, median, quantile, cov
 
 # Measures
 export Normal
 export Exponential
 export Uniform
+export MvNormal
 
 end

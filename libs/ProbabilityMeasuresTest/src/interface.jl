@@ -12,8 +12,8 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
             "returns a real number" => d -> logdensityof(d, testpoint(d)) isa Real,
             "agrees with densityof" =>
                 d -> exp(logdensityof(d, testpoint(d))) ≈ densityof(d, testpoint(d)),
-            "is total at ±Inf and NaN (never throws)" =>
-                d -> all(x -> (logdensityof(d, x); true), (Inf, -Inf, NaN)),
+            "is total at extreme arguments (never throws)" =>
+                d -> all(x -> (logdensityof(d, x); true), _extremepoints(d)),
         ),
         rand=(
             "rand(rng, d) has type eltype(d)" => d -> rand(Xoshiro(1), d) isa eltype(d),
@@ -51,6 +51,21 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
         std="std is the square root of var" => d -> std(d) ≈ sqrt(var(d)),
         median=d -> median(d) isa Real,
         entropy=d -> entropy(d) isa Real,
+        #=
+          A mean vector and a covariance matrix cannot satisfy the scalar predicates
+          above, so a multivariate measure declares these instead.
+        =# meanvector=(
+            "mean is a vector" => d -> mean(d) isa AbstractVector,
+            "mean has the length of a draw" => d -> length(mean(d)) == length(testpoint(d)),
+        ),
+        cov=(
+            "cov is square, with the length of a draw" =>
+                d -> size(cov(d)) == (length(testpoint(d)), length(testpoint(d))),
+            "cov is symmetric" => d -> cov(d) ≈ transpose(cov(d)),
+            "var is the diagonal of cov" =>
+                d -> var(d) ≈ [cov(d)[i, i] for i in axes(cov(d), 1)],
+            "std is the elementwise square root of var" => d -> std(d) ≈ sqrt.(var(d)),
+        ),
     ),
 ) """
 The interface of a normalized probability measure.
@@ -60,6 +75,7 @@ plus the invariants that make a measure usable inside a PPL: `logdensityof` must
 total, and the measure must broadcast as a scalar so that batched evaluation fuses
 into a single kernel.
 
-Optional components are the summaries and the distribution function, which are
-meaningful for a univariate measure but not in general.
+Optional components are the summaries and the distribution function. Most of them are
+meaningful only for a univariate measure; `meanvector` and `cov` are their multivariate
+counterparts. A measure declares the ones it implements.
 """

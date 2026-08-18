@@ -43,6 +43,26 @@ end
     @test !insupport(s, 2.5)
     @test !insupport(s, Inf)
     @test isbits(s)
+
+    #=
+      `RealVectors` carries a dimension, which is an `Int` and so cannot pin a precision
+      the way an endpoint could. Membership is a question about shape as well as value.
+    =#
+    v = RealVectors(2)
+    @test isbits(v)
+    @test insupport(MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]), [0.0, 1.0])
+    @test insupport(v, [0.0, 1.0])
+    @test !insupport(v, [0.0])
+    @test !insupport(v, [0.0, 0.0, 0.0])
+    @test !insupport(v, [0.0, Inf])
+
+    #=
+      It has no endpoints: they exist to bound one-dimensional quadrature, and ``R^n``
+      has none to give. `hasmethod` cannot see this, because Base has a `minimum` for any
+      iterable, which is why `_can_integrate` asks the variate form instead.
+    =#
+    @test_throws MethodError minimum(v)
+    @test_throws MethodError maximum(v)
 end
 
 @testset "total math functions" begin

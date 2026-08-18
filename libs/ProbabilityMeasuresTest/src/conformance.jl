@@ -19,21 +19,77 @@ end
   Fix the tuple length with `Val(fieldcount(D))`. Splatting `p` directly leaves the
   argument count unknown to inference and breaks Mooncake's static rule builder.
 =#
-"Rebuild `d` with parameters taken from the vector `p`."
+"Rebuild `d` with parameters taken from the flat vector `p`, each in its own shape."
 function _reconstruct(d, p)
     D = typeof(d)
-    return constructorof(D)(ntuple(i -> p[i], Val(fieldcount(D)))...)
+    offsets = _paramoffsets(d)
+    return constructorof(D)(
+        ntuple(i -> _unflatten(getfield(d, i), p, offsets[i]), Val(fieldcount(D)))...
+    )
 end
 
 #=
-  The parameters of `d` as a flat vector, promoted to a common *floating-point*
+  The parameters of `d` as one flat vector, promoted to a common *floating-point*
   type. The `float` matters: a measure may carry integer parameters, and an `Int`
   can neither be perturbed by a finite-difference step nor tracked by AD.
+
+  Array parameters are flattened alongside the scalar ones so that the AD, genericity
+  and GPU blocks can treat every measure as a plain parameter vector.
 =#
-_paramvec(d) = collect(promote(map(float, values(params(d)))...))
+_paramvec(d) = reduce(vcat, map(_flatten, values(params(d))))
+
+_flatten(θ::Number) = [float(θ)]
+_flatten(θ::AbstractArray) = vec(float.(θ))
+
+_unflatten(::Number, p, offset::Int) = p[offset]
+_unflatten(θ::AbstractArray, p, offset::Int) = reshape(p[_range(θ, offset)], size(θ))
+
+_range(θ, offset::Int) = offset:(offset + length(θ) - 1)
+
+"Where each parameter of `d` starts in `_paramvec(d)`."
+function _paramoffsets(d)
+    lengths = map(_paramlength, values(params(d)))
+    #=
+      A plain loop over `Int`s. `_reconstruct` calls this inside the function the AD
+      block differentiates, and `sum` with an `init` keyword sends Zygote through a
+      keyword-argument rule it cannot handle.
+    =#
+    return ntuple(Val(length(lengths))) do i
+        offset = 1
+        for j in 1:(i - 1)
+            offset += lengths[j]
+        end
+        return offset
+    end
+end
+
+_paramlength(::Number) = 1
+_paramlength(θ::AbstractArray) = length(θ)
 
 "Rebuild `d` with every parameter converted to `T`."
 _withtype(d, ::Type{T}) where {T} = _reconstruct(d, map(T, _paramvec(d)))
+
+#=
+  An evaluation point converted to `T`. A measure whose draws are vectors is handed
+  vectors, and they convert elementwise.
+=#
+_aspoint(x::Number, ::Type{T}) where {T} = T(x)
+_aspoint(x::AbstractArray, ::Type{T}) where {T} = T.(x)
+
+#=
+  The scalar type inside a draw. `eltype` of a number type is that type, so this is
+  `eltype(d)` for a univariate measure and the element type of the vector for a
+  multivariate one.
+=#
+_elscalar(d) = eltype(eltype(d))
+
+#=
+  A draw reduced to a scalar, so that a gradient of it exists. A scalar draw passes
+  through, which keeps the univariate AD checks exactly as they were: Zygote's `sum`
+  rule does not accept a `Number`.
+=#
+_scalarize(x::Number) = x
+_scalarize(x::AbstractArray) = sum(x)
 
 """
     test_measure(d; kwargs...)
@@ -55,12 +111,17 @@ Each block checks a package guarantee.
 
 # Defaults
 
-Interface conformance, totality, type genericity, inference, allocations, AD, and GPU
-broadcast run for every measure. Other checks are capability-dependent:
+Interface conformance, totality, type genericity, inference, and AD run for every
+measure. Other checks are capability-dependent:
 
   - normalization runs for continuous univariate measures with bounded endpoints;
-  - CDF and moment checks run when those optional methods are implemented;
+  - CDF checks run when those optional methods are implemented;
+  - the allocation, moment and GPU blocks are written around a scalar draw and run for
+    univariate measures;
   - Reactant checks run when its extension is loaded.
+
+A measure the defaults skip still has to be checked; do it in the measure's own test
+file. `test/test-mvnormal.jl` is the worked example.
 """
 function test_measure(
     d;
@@ -74,12 +135,12 @@ function test_measure(
     check_totality::Bool=true,
     check_genericity::Bool=true,
     check_inference::Bool=true,
-    check_allocations::Bool=true,
+    check_allocations::Bool=_can_check_allocations(d),
     check_normalization::Bool=_can_integrate(d),
     check_cdf::Bool=_has_cdf(d),
-    check_moments::Bool=_has_moments(d),
+    check_moments::Bool=_can_check_moments(d),
     check_ad::Bool=true,
-    check_gpu::Bool=true,
+    check_gpu::Bool=_can_gpu(d),
     check_reactant::Bool=_reactant_loaded(),
 )
     @testset "$name" begin
@@ -145,10 +206,32 @@ end
 =#
 _has_cdf(d) = _dispatches_on(cdf, (typeof(d), eltype(d)))
 
-function _has_moments(d)
+#=
+  The moment block compares a scalar mean and variance against Monte Carlo draws with a
+  scalar tolerance, and checks `median` against `quantile`. All of that is univariate: a
+  multivariate measure has a mean vector, a covariance matrix and no quantile, and needs
+  its own moment test.
+=#
+function _can_check_moments(d)
+    d isa UnivariateMeasure || return false
     D = (typeof(d),)
     return _dispatches_on(mean, D) && _dispatches_on(var, D) && _dispatches_on(std, D)
 end
+
+#=
+  Allocation-freedom is a promise about scalar work. A vector-valued draw has to
+  allocate the vector it returns, and whitening an argument needs a temporary, so the
+  block applies to univariate measures. A measure that allocates should say so in its
+  docstring and bound it in its own test file.
+=#
+_can_check_allocations(d) = d isa UnivariateMeasure
+
+#=
+  The GPU block broadcasts the measure over a device array of scalar points, so it wants
+  a univariate measure, and the kernel captures the measure by value, so its parameters
+  have to be `isbits`. Array parameters are neither.
+=#
+_can_gpu(d) = (d isa UnivariateMeasure) && isbits(_withtype(d, Float32))
 
 "Evaluation points spanning the bulk and both tails of `d`."
 function default_testpoints(d)
@@ -163,7 +246,7 @@ function test_totality(d, xs)
       A throw here is undefined behaviour inside a GPU kernel, and a PPL will hand
       these values in from a bad proposal or an overshooting line search.
     =#
-    for x in (Inf, -Inf, NaN, floatmax(Float64), -floatmax(Float64), 0.0)
+    for x in _extremepoints(d)
         @test (logdensityof(d, x); true)
     end
     for x in xs
@@ -183,27 +266,35 @@ end
 "Instances of `typeof(d)` with invalid parameters; empty if none are known."
 _invalids(d) = ()
 
+"""
+Arguments on which `logdensityof(d, ·)` must not throw, in the shape of a draw from `d`.
+
+The default is the scalar set. A measure whose draws are vectors overrides this, and
+should include a wrongly-shaped argument: totality covers the shape as well as the
+value.
+"""
+_extremepoints(d) = (Inf, -Inf, NaN, floatmax(Float64), -floatmax(Float64), 0.0)
+
 # Invariant 1: type genericity.
 
 function test_genericity(d, xs, types)
     for T in types
         dT = _withtype(d, T)
-        x = T(first(xs))
+        x = _aspoint(first(xs), T)
         @test logdensityof(dT, x) isa T
-        @test rand(Xoshiro(1), dT) isa T
-        @test eltype(dT) === T
+        @test rand(Xoshiro(1), dT) isa eltype(dT)
+        @test _elscalar(dT) === T
     end
 
     #=
-      Use a tuple to preserve mixed parameter types; an array literal would promote
-      them before the test reaches the constructor.
+      Mixed parameter types have to promote rather than pin the result. The instance is
+      built field by field: a flat parameter vector could not hold two types.
     =#
-    p = _paramvec(d)
-    if length(p) >= 2
-        mixed = _reconstruct(d, (Float32(p[1]), Float64.(p[2:end])...))
+    mixed = _mixedparams(d)
+    if mixed !== nothing
         # Assert the measure really is mixed before drawing any conclusion from it.
         @test length(unique(fieldtypes(typeof(mixed)))) > 1
-        @test logdensityof(mixed, Float32(first(xs))) isa Float64
+        @test logdensityof(mixed, _aspoint(first(xs), Float32)) isa Float64
     end
 
     #=
@@ -213,20 +304,32 @@ function test_genericity(d, xs, types)
     exact = _exactparams(d)
     if exact !== nothing
         x = first(xs)
-        @test logdensityof(exact, Float32(x)) isa Float32
-        vbig = logdensityof(exact, big(float(x)))
+        @test logdensityof(exact, _aspoint(x, Float32)) isa Float32
+        vbig = logdensityof(exact, _aspoint(x, BigFloat))
         @test vbig isa BigFloat
         #=
           The same measure with the parameters already widened. If any Irrational
           constant or `log` were evaluated at Float64 along the way, these would
           agree only to ~1e-16 instead of to full BigFloat precision.
         =#
-        @test abs(vbig - logdensityof(_withtype(exact, BigFloat), big(float(x)))) < 1e-70
+        widened = logdensityof(_withtype(exact, BigFloat), _aspoint(x, BigFloat))
+        @test abs(vbig - widened) < 1e-70
     end
 end
 
 "An instance of `typeof(d)` with exact (integer) parameters, or `nothing`."
 _exactparams(d) = nothing
+
+#=
+  `d` with its first parameter at `Float32` and the rest at `Float64`, or `nothing` for a
+  one-parameter measure, where there is nothing to mix.
+=#
+function _mixedparams(d)
+    D = typeof(d)
+    fieldcount(D) >= 2 || return nothing
+    types = ntuple(i -> i == 1 ? Float32 : Float64, Val(fieldcount(D)))
+    return constructorof(D)(map(_aspoint, values(params(d)), types)...)
+end
 
 # Type stability and allocations.
 
@@ -370,16 +473,17 @@ function test_ad(d, xs, backends)
       Sampling is written in reparameterized form, so the pathwise derivative must
       exist and be exact under every backend `logdensityof` is checked under, not just
       one: a VI backend in the PPL relies on it.
-    =#
-    draw = p -> rand(Xoshiro(7), _reconstruct(d, p))
-    draw_reference = FiniteDifferences.grad(central_fdm(5, 1), draw, p0_ref)[1]
 
-    #=
-      Sampling is written in reparameterized form, so the pathwise derivative must
-      exist and be exact under every backend `logdensityof` is checked under, not just
-      one: a VI backend in the PPL relies on it.
+      A vector-valued draw is summed so that a gradient exists at all; a scalar draw
+      reaches the backend untouched.
+
+      This reference takes `p0` rather than the widened `p0_ref`: `noisetype` follows the
+      parameter type, so widening the parameters draws its noise from a different stream
+      and differentiates a slightly different function. The two streams happen to agree
+      to `Float32` rounding, but a reparameterized draw is affine in the parameters, so
+      the unwidened step costs no accuracy and needs no such coincidence.
     =#
-    draw = p -> rand(Xoshiro(7), _reconstruct(d, p))
+    draw = p -> _scalarize(rand(Xoshiro(7), _reconstruct(d, p)))
     draw_reference = FiniteDifferences.grad(central_fdm(5, 1), draw, p0)[1]
 
     for backend in backends

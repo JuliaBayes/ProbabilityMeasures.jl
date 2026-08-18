@@ -11,7 +11,7 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements the univariate normal,
-exponential, and uniform measures.
+exponential, and uniform measures, and the multivariate normal.
 
 ## Installation
 
@@ -67,6 +67,28 @@ than throwing.
 - `quantile`, `mean`, `median`, `var`, `std`, and `entropy`
 - `rand` and Random's array-sampling methods
 - `params`, `support`, `insupport`, and `checkparams`
+
+`MvNormal(μ, L)` takes the lower-triangular Cholesky factor of the covariance, not the
+covariance itself: a draw is then `μ + L z`, so sampling stays differentiable in the
+parameters and the density costs one triangular solve rather than a factorization per
+evaluation. Factor once at the call site if you hold a covariance.
+
+```julia
+using LinearAlgebra, ProbabilityMeasures
+
+Σ = [4.0 1.0; 1.0 2.5]
+d = MvNormal([1.0, -2.0], Matrix(cholesky(Σ).L))
+
+logdensityof(d, [0.3, -1.0])
+mean(d), cov(d), var(d), std(d), entropy(d)
+rand(d)
+```
+
+It supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`, `std`, `entropy`,
+`params`, `support`, `insupport`, and `checkparams`. `var` and `std` are the marginals,
+the diagonal of `cov` and its elementwise square root. There is no `cdf`, `quantile`, or
+`median`: none of them has a closed form in more than one dimension. Its `logdensityof`
+also allocates, where the univariate measures' do not.
 
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
@@ -143,9 +165,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 
 ## Current scope
 
-ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, and `Uniform`.
-Discrete and multivariate measures, transformed or composite measures, and
-Distributions.jl interoperability are not implemented yet.
+ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, `Uniform`, and
+`MvNormal`. Discrete measures, transformed or composite measures, and Distributions.jl
+interoperability are not implemented yet.
 
 ## Citation
 

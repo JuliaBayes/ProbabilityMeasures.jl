@@ -18,10 +18,13 @@ using ProbabilityMeasures
   measure `d` is, and `isa ContinuousMeasure` is the idiom the package itself uses.
 =#
 using ProbabilityMeasures: ContinuousMeasure, UnivariateMeasure
+#= `unwhiten` maps standard normal coordinates back, which is how `MvNormal`'s default
+   test points are built. =#
+using ProbabilityMeasures: unwhiten
 using QuadGK: quadgk
 using Random: Xoshiro
 using ReverseDiff: ReverseDiff
-using Statistics: mean, median, quantile, std, var
+using Statistics: cov, mean, median, quantile, std, var
 using StatsAPI: params
 using Test: @inferred, @test, @testset
 using Zygote: Zygote
