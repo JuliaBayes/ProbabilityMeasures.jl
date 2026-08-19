@@ -33,9 +33,9 @@ end
 
 Total `erfcinv`: returns `NaN` where `erfcinv` would throw a `DomainError`.
 
-[`quantile`](@ref) must stay total (invariant 2 of
-[`AbstractProbabilityMeasure`](@ref)): a probability that drifts slightly outside
-`[0, 1]`, for example from float noise in a `cdf` round-trip, must not throw.
+`quantile` must stay total (invariant 2 of [`AbstractProbabilityMeasure`](@ref)): a
+probability that drifts slightly outside `[0, 1]`, for example from float noise in a `cdf`
+round-trip, must not throw.
 """
 @inline function erfcinvt(y::Number)
     #=

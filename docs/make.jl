@@ -1,5 +1,6 @@
 using ProbabilityMeasures
 using Documenter
+using DocumenterCodeBlocks
 
 DocMeta.setdocmeta!(
     ProbabilityMeasures, :DocTestSetup, :(using ProbabilityMeasures); recursive=true
@@ -67,6 +68,7 @@ makedocs(;
     sitename="ProbabilityMeasures.jl",
     format=Documenter.HTML(; canonical="https://rsenne.github.io/ProbabilityMeasures.jl"),
     pages=list_pages(),
+    plugins=[CodeBlocks()],
 )
 
 deploydocs(; repo="github.com/rsenne/ProbabilityMeasures.jl")

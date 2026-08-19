@@ -1,10 +1,11 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterCodeBlocks = "b6400b83-267f-4b55-9fd8-bffc853bdfd8"
 LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
 ProbabilityMeasures = "d96443b0-2461-4412-bb6f-797ac5201ef9"
 
-[compat]
-Documenter = "1"
-
 [sources]
 ProbabilityMeasures = {path = ".."}
+
+[compat]
+Documenter = "1"
