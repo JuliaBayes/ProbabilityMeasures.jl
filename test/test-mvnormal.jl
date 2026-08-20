@@ -8,12 +8,8 @@ using Random: Xoshiro
 using Test
 
 #=
-  Distributions.jl is a test-only numerical reference. `MvNormal` is parameterized by
-  the Cholesky factor, so the reference takes `L L'` as its covariance.
-
-  The factor is read entry by entry, and only its lower triangle, which is both what the
-  measure itself promises and the one spelling that covers a matrix, a `Diagonal` and a
-  `UniformScaling` alike: the last of these is not an array and does not broadcast.
+  Build the reference covariance from the lower triangle of `L`. Entrywise access works
+  for matrices, `Diagonal`, and `UniformScaling`.
 =#
 function lowertriangle(m)
     n = length(m.μ)
@@ -35,7 +31,6 @@ const CORRELATED = MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5])
         CORRELATED,
         MvNormal(Float32[0.0, 1.0], Float32[1.0 0.0; -0.25 0.5]),
         MvNormal([0, 0, 0], [2 0 0; 1 2 0; 0 1 2]),
-        # The structured factors take their own paths through every one of these blocks.
         MvNormal([1.0, -2.0], Diagonal([2.0, 1.5])),
         MvNormal(Float32[0.0, 1.0], Diagonal(Float32[0.5, 2.0])),
         MvNormal([1.0, -2.0], 1.5 * I),
@@ -47,17 +42,13 @@ const CORRELATED = MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5])
 end
 
 #=
-  The blocks `test_measure` skips for a multivariate measure, done here in the shape a
-  multivariate measure needs: `test_normalization` integrates in one dimension,
-  `test_moments` compares scalar summaries, `test_allocations` proves a scalar draw
-  allocates nothing, and `test_gpu` broadcasts over a device array of scalars.
+  Multivariate versions of the generic normalization, moment, and allocation tests.
 =#
 
 @testset "normalization by two-dimensional quadrature" begin
     for d in (MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]), CORRELATED)
         #=
-          Ten marginal standard deviations leave less than 1e-22 outside the box, well
-          under the tolerance the quadrature itself reaches.
+          Ten marginal standard deviations make the omitted tail negligible here.
         =#
         lo, hi = mean(d) .- 10 .* std(d), mean(d) .+ 10 .* std(d)
         inner(x1) = first(quadgk(x2 -> densityof(d, [x1, x2]), lo[2], hi[2]; rtol=1e-11))
@@ -85,10 +76,8 @@ end
     bytes = @allocated logdensityof(d, x)
     @test bytes == @allocated logdensityof(d, x)
     #=
-      Forward substitution grows the whitened vector one row at a time, so the count is
-      one small array per dimension and nothing else. The bound is loose enough not to
-      depend on the allocator's minimum block, tight enough to fail if the density ever
-      starts allocating per evaluation point.
+      Keep the bound above allocator-dependent overhead but below an accidental large
+      allocation.
     =#
     @test bytes <= 1024
 end
@@ -115,24 +104,14 @@ end
 end
 
 #=
-  The structured factors are an optimization, so the thing to test is that they change
-  nothing observable. Each is compared against the same measure written as a full matrix,
-  which takes the general path.
-
-  Dimensions past two matter. At `n = 2` the isotropic ``\log \det L``, `n * log(λ)`,
-  equals the general path's `log(λ) + log(λ)` bit for bit, because `2x == x + x` in binary
-  floating point, so an equality assertion there is free. Further up the two forms can
-  land a last bit apart, which is why the log-densities are compared to a few ulps. The
-  diagonal path accumulates in the same order as the general one and stays exact.
+  Compare structured factors with equivalent dense factors. The isotropic log determinant
+  may differ by a few ulps because multiplication and repeated addition round differently.
 =#
 @testset "structured factors agree with the general path" begin
-    # Within a few ulps of the larger operand, which is far tighter than `≈`'s default.
     lastbit(a, b) = abs(a - b) <= 4 * eps(max(abs(a), abs(b)))
 
     #=
-      The disagreement the tolerance exists for, in plain arithmetic: at `n = 9` and
-      `λ = 1.5` the two forms of ``\log \det L`` land a bit apart, so the sizes below are
-      not all free.
+      Confirm that the chosen case exercises the rounding difference.
     =#
     @test 9 * log(1.5) != sum(log(1.5) for _ in 1:9)
 
@@ -160,19 +139,15 @@ end
             @test entropy(structured) ≈ entropy(full)
             @test checkparams(structured) == checkparams(full)
             @test support(structured) === support(full)
-            # Same reparameterization, so the same seed gives the same draw.
             @test rand(Xoshiro(1), structured) == rand(Xoshiro(1), full)
-            # And the same totality in the shape of the argument.
             @test isnan(logdensityof(structured, zeros(n - 1)))
         end
 
-        # The diagonal path sums as the general one does, so it agrees exactly.
         for x in xs
             @test logdensityof(diagonal, x) == logdensityof(diagdense, x)
             @test densityof(diagonal, x) == densityof(diagdense, x)
         end
 
-        # And at `n = 2` so does the isotropic one, which is what the tolerance replaces.
         if n == 2
             for x in xs
                 @test logdensityof(isotropic, x) == logdensityof(isodense, x)
@@ -182,9 +157,7 @@ end
     end
 
     #=
-      A structured factor has its own `checkparams` and its own whitening, so it needs its
-      own invalid cases: a zero diagonal entry divides by zero, a negative one takes the
-      log of a negative number.
+      Exercise invalid parameters through the structured-factor methods.
     =#
     μ = [1.0, -2.0]
     for bad in (
@@ -204,21 +177,18 @@ end
     diagonal = MvNormal([1.0, -2.0], Diagonal([2.0, 1.5]))
     isotropic = MvNormal([1.0, -2.0], 1.5 * I)
 
-    # A structured factor squares to a structured covariance rather than a dense one.
     @test cov(diagonal) isa Diagonal
     @test cov(isotropic) isa Diagonal
 
     #=
-      An isotropic factor carries no dimension, so `n` comes from `μ`, and it is `isbits`
-      where a matrix-backed factor is not.
+      An isotropic factor takes its dimension from `μ` and is stored as an `isbits` value.
     =#
     @test support(isotropic) === RealVectors(2)
     @test isbits(isotropic.L)
     @test !isbits(MvNormal([1.0, -2.0], [1.5 0.0; 0.0 1.5]).L)
 
     #=
-      The second argument is the factor, so these are standard deviations. Distributions.jl
-      spells the same measure with a variance.
+      The factor stores standard deviations; Distributions.jl takes a covariance here.
     =#
     @test var(isotropic) ≈ fill(1.5^2, 2)
     @test var(diagonal) ≈ [2.0^2, 1.5^2]
@@ -250,19 +220,14 @@ end
     @test logdensityof(exact, Float32[1, 2]) isa Float32
     @test logdensityof(exact, big.([1.0, 2.0])) isa BigFloat
 
-    #=
-      Check that no Float64 intermediate caps BigFloat precision.
-    =#
+    # Check that no Float64 intermediate caps BigFloat precision.
     x = big.([1.0, 2.0])
     full = logdensityof(MvNormal(big.([0, 0]), big.([2 0; 1 2])), x)
     @test abs(logdensityof(exact, x) - full) < 1e-70
 
     #=
-      Rational parameters at a rational point: division stays exact, so the whitened
-      point and its sum of squares are `Rational` too. The `2π` term has to be converted
-      into the *floated* type, since a `Rational{Int}` holding `log2π` overflows on the
-      next addition and a `Rational{BigInt}` cannot hold it at all. All three factor
-      kinds go through the same line.
+      Exact arithmetic reaches the `2π` term as a rational, which must be converted to
+      the corresponding floating-point type.
     =#
     rationals = (
         (
@@ -284,19 +249,15 @@ end
         end
     end
 
-    # `Rational{BigInt}` fails in the conversion rather than overflowing after it.
     dbig = MvNormal([big(0)//1, big(0)//1], [big(1)//1 big(0)//1; big(1)//2 big(3)//2])
     @test logdensityof(dbig, [big(1)//3, big(1)//5]) isa BigFloat
 end
 
 @testset "construction never validates" begin
     μ = [0.0, 0.0]
-    # A zero diagonal entry: the solve divides by it.
     @test !checkparams(MvNormal(μ, [1.0 0.0; 0.0 0.0]))
-    # A negative one: the log of it is not a number.
     @test !checkparams(MvNormal(μ, [1.0 0.0; 0.0 -1.0]))
     @test !checkparams(MvNormal([Inf, 0.0], [1.0 0.0; 0.0 1.0]))
-    # Shapes that do not line up, including the empty measure.
     @test !checkparams(MvNormal(μ, [1.0 0.0 0.0; 0.0 1.0 0.0]))
     @test !checkparams(MvNormal(μ, [1.0 0.0; 0.0 1.0; 0.0 0.0]))
     @test !checkparams(MvNormal(Float64[], zeros(0, 0)))
@@ -317,7 +278,6 @@ end
     @test isnan(logdensityof(d, [0.5]))
     @test isnan(logdensityof(d, Float64[]))
     @test isnan(logdensityof(d, [0.5, 0.5, 0.5]))
-    # The `NaN` still carries the type the promotion invariant asks for.
     @test logdensityof(d, Float32[0.5]) isa Float64
     @test logdensityof(MvNormal(Float32[0, 0], Float32[1 0; 0 1]), Float32[0.5]) isa Float32
     for x in ([Inf, Inf], [-Inf, 0.0], [NaN, 0.0], fill(floatmax(Float64), 2))
@@ -353,15 +313,14 @@ end
     @test eltype(rand(Xoshiro(1), d, 5)) === Vector{Float64}
 
     #=
-      The draw is the reparameterization, exactly: noise drawn in the plain float type,
-      then pushed through `μ + L z`.
+      Sampling uses the reparameterization `μ + Lz`.
     =#
     z = randn(Xoshiro(7), Float64, 2)
     @test rand(Xoshiro(7), d) == d.μ + d.L * z
 
     #=
-      So its Jacobian in `μ` is the identity, and its derivative in a factor entry is
-      the noise that entry multiplies.
+      Its Jacobian in `μ` is the identity; the derivative of a factor entry is the
+      corresponding noise value.
     =#
     jac = ForwardDiff.jacobian(m -> rand(Xoshiro(7), MvNormal(m, d.L)), d.μ)
     @test jac == [1.0 0.0; 0.0 1.0]

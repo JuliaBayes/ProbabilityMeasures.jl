@@ -51,10 +51,8 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
         std="std is the square root of var" => d -> std(d) ≈ sqrt(var(d)),
         median=d -> median(d) isa Real,
         entropy=d -> entropy(d) isa Real,
-        #=
-          A mean vector and a covariance matrix cannot satisfy the scalar predicates
-          above, so a multivariate measure declares these instead.
-        =# meanvector=(
+        # Multivariate summaries.
+        meanvector=(
             "mean is a vector" => d -> mean(d) isa AbstractVector,
             "mean has the length of a draw" => d -> length(mean(d)) == length(testpoint(d)),
         ),
@@ -75,7 +73,6 @@ plus the invariants that make a measure usable inside a PPL: `logdensityof` must
 total, and the measure must broadcast as a scalar so that batched evaluation fuses
 into a single kernel.
 
-Optional components are the summaries and the distribution function. Most of them are
-meaningful only for a univariate measure; `meanvector` and `cov` are their multivariate
-counterparts. A measure declares the ones it implements.
+Optional components cover distribution functions and univariate or multivariate
+summaries. A measure declares the components it implements.
 """

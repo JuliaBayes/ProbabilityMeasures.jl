@@ -52,9 +52,6 @@ Base.maximum(::NonNegativeReals) = Inf
 
 The closed interval ``[a, b]``.
 
-The endpoints come from the measure that produced the support, so this one cannot be
-a singleton. It keeps their types rather than promoting them, for the same reason
-measures keep their parameter types.
 """
 struct RealInterval{A<:Number,B<:Number} <: Support
     a::A
@@ -71,20 +68,11 @@ Base.maximum(s::RealInterval) = s.b
 
 The real vectors of length `n`, ``\\mathbb{R}^n``.
 
-The dimension is a payload, so this is not a singleton, but an `Int` cannot pin a
-numeric precision the way `RealInterval`'s endpoints can.
-
-There is no `minimum` or `maximum`: the endpoints exist to bound one-dimensional
-quadrature, and ``\\mathbb{R}^n`` has none to give.
 """
 struct RealVectors <: Support
     n::Int
 end
 
-#=
-  The length test comes first but `&` evaluates both sides, so `all` has to be safe on
-  a vector of the wrong length. It is.
-=#
 function insupport(s::RealVectors, x::AbstractVector{<:Number})
     return (length(x) == s.n) & all(isfinite, x)
 end

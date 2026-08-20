@@ -68,10 +68,8 @@ than throwing.
 - `rand` and Random's array-sampling methods
 - `params`, `support`, `insupport`, and `checkparams`
 
-`MvNormal(μ, L)` takes the lower-triangular Cholesky factor of the covariance, not the
-covariance itself: a draw is then `μ + L z`, so sampling stays differentiable in the
-parameters and the density costs one triangular solve rather than a factorization per
-evaluation. Factor once at the call site if you hold a covariance.
+`MvNormal(μ, L)` takes a lower-triangular covariance factor, so `cov(d) == L * L'`.
+If you have a covariance matrix, factor it before constructing the measure.
 
 ```julia
 using LinearAlgebra, ProbabilityMeasures
@@ -85,15 +83,10 @@ rand(d)
 ```
 
 It supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`, `std`, `entropy`,
-`params`, `support`, `insupport`, and `checkparams`. `var` and `std` are the marginals,
-the diagonal of `cov` and its elementwise square root. There is no `cdf`, `quantile`, or
-`median`: none of them has a closed form in more than one dimension. Its `logdensityof`
-also allocates, where the univariate measures' do not.
+`params`, `support`, `insupport`, and `checkparams`. `var` and `std` return marginal
+values. Multivariate `cdf`, `quantile`, and `median` are not provided.
 
-A `Diagonal` or `UniformScaling` factor takes a shorter path. Whitening a general factor
-is a forward substitution, `O(n²)` and sequential; a diagonal one is a single elementwise
-division. The measure is the same, only cheaper, and a `UniformScaling` factor is
-`isbits`.
+Diagonal and isotropic factors are also supported:
 
 ```julia
 MvNormal(μ, L)                # general
@@ -101,9 +94,8 @@ MvNormal(μ, Diagonal(σ))      # independent coordinates, σ their standard dev
 MvNormal(μ, σ * I)            # isotropic, σ the common standard deviation
 ```
 
-The second argument is always the *factor*, so a structured one carries standard
-deviations. Distributions.jl spells its structured cases with the *covariance*, as
-`MvNormal(μ, σ² * I)`, so take a square root when porting.
+The second argument is always a factor. In the diagonal and isotropic forms, `σ`
+contains standard deviations, not variances.
 
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:

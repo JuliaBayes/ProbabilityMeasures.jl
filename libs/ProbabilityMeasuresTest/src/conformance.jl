@@ -19,7 +19,7 @@ end
   Fix the tuple length with `Val(fieldcount(D))`. Splatting `p` directly leaves the
   argument count unknown to inference and breaks Mooncake's static rule builder.
 =#
-"Rebuild `d` with parameters taken from the flat vector `p`, each in its own shape."
+"Rebuild `d` from the flattened parameters in `p`."
 function _reconstruct(d, p)
     D = typeof(d)
     offsets = _paramoffsets(d)
@@ -29,12 +29,8 @@ function _reconstruct(d, p)
 end
 
 #=
-  The parameters of `d` as one flat vector, promoted to a common *floating-point*
-  type. The `float` matters: a measure may carry integer parameters, and an `Int`
-  can neither be perturbed by a finite-difference step nor tracked by AD.
-
-  Array parameters are flattened alongside the scalar ones so that the AD, genericity
-  and GPU blocks can treat every measure as a plain parameter vector.
+  Flatten parameters into a floating-point vector for numerical differentiation and
+  AD. Integer parameters cannot be perturbed or tracked directly.
 =#
 _paramvec(d) = reduce(vcat, map(_flatten, values(params(d))))
 
@@ -47,11 +43,7 @@ _unflatten(θ::AbstractArray, p, offset::Int) = reshape(p[_range(θ, offset)], s
 _range(θ, offset::Int) = offset:(offset + length(θ) - 1)
 
 #=
-  A structured parameter carries fewer numbers than its shape suggests, and rebuilding it
-  has to put the structure back: flattening a `Diagonal` through the `AbstractArray`
-  method above would hand the AD blocks `n²` entries, most of them a constant zero, and
-  unflattening would return a dense matrix, quietly moving the measure off the very code
-  path under test. A `UniformScaling` is not an `AbstractArray` at all.
+  Preserve structured parameters when flattening and rebuilding them.
 =#
 _flatten(θ::Diagonal) = _flatten(θ.diag)
 _paramlength(θ::Diagonal) = length(θ.diag)
@@ -61,13 +53,11 @@ _flatten(θ::UniformScaling) = [float(θ.λ)]
 _paramlength(::UniformScaling) = 1
 _unflatten(::UniformScaling, p, offset::Int) = p[offset] * I
 
-"Where each parameter of `d` starts in `_paramvec(d)`."
+"Starting index of each parameter in `_paramvec(d)`."
 function _paramoffsets(d)
     lengths = map(_paramlength, values(params(d)))
     #=
-      A plain loop over `Int`s. `_reconstruct` calls this inside the function the AD
-      block differentiates, and `sum` with an `init` keyword sends Zygote through a
-      keyword-argument rule it cannot handle.
+      Use a loop because Zygote cannot handle the keyword call required by `sum` here.
     =#
     return ntuple(Val(length(lengths))) do i
         offset = 1
@@ -84,26 +74,15 @@ _paramlength(θ::AbstractArray) = length(θ)
 "Rebuild `d` with every parameter converted to `T`."
 _withtype(d, ::Type{T}) where {T} = _reconstruct(d, map(T, _paramvec(d)))
 
-#=
-  An evaluation point converted to `T`. A measure whose draws are vectors is handed
-  vectors, and they convert elementwise.
-=#
+# Convert scalar and structured evaluation points to `T`.
 _aspoint(x::Number, ::Type{T}) where {T} = T(x)
 _aspoint(x::AbstractArray, ::Type{T}) where {T} = T.(x)
 _aspoint(x::UniformScaling, ::Type{T}) where {T} = T(x.λ) * I
 
-#=
-  The scalar type inside a draw. `eltype` of a number type is that type, so this is
-  `eltype(d)` for a univariate measure and the element type of the vector for a
-  multivariate one.
-=#
+# Scalar element type of a draw.
 _elscalar(d) = eltype(eltype(d))
 
-#=
-  A draw reduced to a scalar, so that a gradient of it exists. A scalar draw passes
-  through, which keeps the univariate AD checks exactly as they were: Zygote's `sum`
-  rule does not accept a `Number`.
-=#
+# Reduce vector draws to a scalar for gradient tests.
 _scalarize(x::Number) = x
 _scalarize(x::AbstractArray) = sum(x)
 
@@ -136,8 +115,7 @@ measure. Other checks are capability-dependent:
     univariate measures;
   - Reactant checks run when its extension is loaded.
 
-A measure the defaults skip still has to be checked; do it in the measure's own test
-file. `test/test-mvnormal.jl` is the worked example.
+Checks skipped by these defaults belong in the measure's own test file.
 """
 function test_measure(
     d;
@@ -223,10 +201,7 @@ end
 _has_cdf(d) = _dispatches_on(cdf, (typeof(d), eltype(d)))
 
 #=
-  The moment block compares a scalar mean and variance against Monte Carlo draws with a
-  scalar tolerance, and checks `median` against `quantile`. All of that is univariate: a
-  multivariate measure has a mean vector, a covariance matrix and no quantile, and needs
-  its own moment test.
+  The generic moment checks assume scalar summaries and quantiles.
 =#
 function _can_check_moments(d)
     d isa UnivariateMeasure || return false
@@ -235,17 +210,13 @@ function _can_check_moments(d)
 end
 
 #=
-  Allocation-freedom is a promise about scalar work. A vector-valued draw has to
-  allocate the vector it returns, and whitening an argument needs a temporary, so the
-  block applies to univariate measures. A measure that allocates should say so in its
-  docstring and bound it in its own test file.
+  Vector-valued densities and draws may need result storage, so allocation checks are
+  defined by their measure-specific tests.
 =#
 _can_check_allocations(d) = d isa UnivariateMeasure
 
 #=
-  The GPU block broadcasts the measure over a device array of scalar points, so it wants
-  a univariate measure, and the kernel captures the measure by value, so its parameters
-  have to be `isbits`. Array parameters are neither.
+  The generic GPU test broadcasts over scalar points and captures an `isbits` measure.
 =#
 _can_gpu(d) = (d isa UnivariateMeasure) && isbits(_withtype(d, Float32))
 
@@ -282,13 +253,7 @@ end
 "Instances of `typeof(d)` with invalid parameters; empty if none are known."
 _invalids(d) = ()
 
-"""
-Arguments on which `logdensityof(d, ·)` must not throw, in the shape of a draw from `d`.
-
-The default is the scalar set. A measure whose draws are vectors overrides this, and
-should include a wrongly-shaped argument: totality covers the shape as well as the
-value.
-"""
+"Inputs used to check that `logdensityof` is total."
 _extremepoints(d) = (Inf, -Inf, NaN, floatmax(Float64), -floatmax(Float64), 0.0)
 
 # Invariant 1: type genericity.
@@ -303,8 +268,7 @@ function test_genericity(d, xs, types)
     end
 
     #=
-      Mixed parameter types have to promote rather than pin the result. The instance is
-      built field by field: a flat parameter vector could not hold two types.
+      Build mixed parameters field by field because a vector would promote them first.
     =#
     mixed = _mixedparams(d)
     if mixed !== nothing
@@ -337,8 +301,7 @@ end
 _exactparams(d) = nothing
 
 #=
-  `d` with its first parameter at `Float32` and the rest at `Float64`, or `nothing` for a
-  one-parameter measure, where there is nothing to mix.
+  Use `Float32` for the first parameter and `Float64` for the rest.
 =#
 function _mixedparams(d)
     D = typeof(d)
@@ -375,9 +338,8 @@ function test_normalization(d)
 end
 
 #=
-  The endpoints of the support, widened to at least `Float64`. A measure whose support
-  carries its own endpoints hands back the parameter type, and a `Float32` interval
-  would ask QuadGK for an `rtol` it cannot reach.
+  Widen integration limits to at least `Float64` so QuadGK can meet the requested
+  tolerance.
 =#
 function _quadlimits(d)
     s = support(d)
@@ -475,29 +437,16 @@ function test_ad(d, xs, backends)
     x = first(xs)
     p0 = _paramvec(d)
     #=
-      The finite-difference reference needs its own precision floor: at a `Float32`
-      p0, `central_fdm`'s step size is tied to `eps(Float32)`, and for a measure whose
-      log-density is nonlinear in its parameters that reference can miss `rtol = 1e-5`
-      even though the AD gradient is exact. Widening only the reference keeps the AD
-      call itself exercising the real parameter type.
+      Use at least `Float64` for the finite-difference reference. The AD call still uses
+      the measure's parameter type.
     =#
     p0_ref = convert.(promote_type(eltype(p0), Float64), p0)
     f = p -> logdensityof(_reconstruct(d, p), x)
     reference = FiniteDifferences.grad(central_fdm(5, 1), f, p0_ref)[1]
 
     #=
-      Sampling is written in reparameterized form, so the pathwise derivative must
-      exist and be exact under every backend `logdensityof` is checked under, not just
-      one: a VI backend in the PPL relies on it.
-
-      A vector-valued draw is summed so that a gradient exists at all; a scalar draw
-      reaches the backend untouched.
-
-      This reference takes `p0` rather than the widened `p0_ref`: `noisetype` follows the
-      parameter type, so widening the parameters draws its noise from a different stream
-      and differentiates a slightly different function. The two streams happen to agree
-      to `Float32` rounding, but a reparameterized draw is affine in the parameters, so
-      the unwidened step costs no accuracy and needs no such coincidence.
+      Reduce vector draws to a scalar before differentiating. Keep the original
+      parameter type so the reference and AD calls draw the same noise.
     =#
     draw = p -> _scalarize(rand(Xoshiro(7), _reconstruct(d, p)))
     draw_reference = FiniteDifferences.grad(central_fdm(5, 1), draw, p0)[1]
