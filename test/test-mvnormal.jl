@@ -118,29 +118,67 @@ end
   The structured factors are an optimization, so the thing to test is that they change
   nothing observable. Each is compared against the same measure written as a full matrix,
   which takes the general path.
+
+  Dimensions past two matter. At `n = 2` the isotropic ``\log \det L``, `n * log(λ)`,
+  equals the general path's `log(λ) + log(λ)` bit for bit, because `2x == x + x` in binary
+  floating point, so an equality assertion there is free. Further up the two forms can
+  land a last bit apart, which is why the log-densities are compared to a few ulps. The
+  diagonal path accumulates in the same order as the general one and stays exact.
 =#
 @testset "structured factors agree with the general path" begin
-    μ = [1.0, -2.0]
-    pairs = (
-        (MvNormal(μ, Diagonal([2.0, 1.5])), MvNormal(μ, [2.0 0.0; 0.0 1.5])),
-        (MvNormal(μ, 1.5 * I), MvNormal(μ, [1.5 0.0; 0.0 1.5])),
-    )
-    for (structured, full) in pairs
-        for x in ([0.0, 0.0], [0.3, -1.0], mean(structured), [-4.0, 7.5])
-            @test logdensityof(structured, x) == logdensityof(full, x)
-            @test densityof(structured, x) == densityof(full, x)
+    # Within a few ulps of the larger operand, which is far tighter than `≈`'s default.
+    lastbit(a, b) = abs(a - b) <= 4 * eps(max(abs(a), abs(b)))
+
+    #=
+      The disagreement the tolerance exists for, in plain arithmetic: at `n = 9` and
+      `λ = 1.5` the two forms of ``\log \det L`` land a bit apart, so the sizes below are
+      not all free.
+    =#
+    @test 9 * log(1.5) != sum(log(1.5) for _ in 1:9)
+
+    densefactor(v, n) = [i == j ? v[i] : 0.0 for i in 1:n, j in 1:n]
+
+    for n in (2, 3, 5, 9)
+        μ = [1.5 - i for i in 1:n]
+        σ = [1.0 + i / 4 for i in 1:n]
+        λ = 1.5
+        diagonal = MvNormal(μ, Diagonal(σ))
+        isotropic = MvNormal(μ, λ * I)
+        diagdense = MvNormal(μ, densefactor(σ, n))
+        isodense = MvNormal(μ, densefactor(fill(λ, n), n))
+        xs = (zeros(n), μ, μ .+ 0.3, μ .- 4.0, [3.0 * (-1)^i for i in 1:n])
+
+        for (structured, full) in ((diagonal, diagdense), (isotropic, isodense))
+            for x in xs
+                @test lastbit(logdensityof(structured, x), logdensityof(full, x))
+                @test densityof(structured, x) ≈ densityof(full, x)
+            end
+            @test cov(structured) == cov(full)
+            @test var(structured) == var(full)
+            @test std(structured) == std(full)
+            @test mean(structured) == mean(full)
+            @test entropy(structured) ≈ entropy(full)
+            @test checkparams(structured) == checkparams(full)
+            @test support(structured) === support(full)
+            # Same reparameterization, so the same seed gives the same draw.
+            @test rand(Xoshiro(1), structured) == rand(Xoshiro(1), full)
+            # And the same totality in the shape of the argument.
+            @test isnan(logdensityof(structured, zeros(n - 1)))
         end
-        @test cov(structured) == cov(full)
-        @test var(structured) == var(full)
-        @test std(structured) == std(full)
-        @test mean(structured) == mean(full)
-        @test entropy(structured) ≈ entropy(full)
-        @test checkparams(structured) == checkparams(full)
-        @test support(structured) === support(full)
-        # Same reparameterization, so the same seed gives the same draw.
-        @test rand(Xoshiro(1), structured) == rand(Xoshiro(1), full)
-        # And the same totality in the shape of the argument.
-        @test isnan(logdensityof(structured, [0.5]))
+
+        # The diagonal path sums as the general one does, so it agrees exactly.
+        for x in xs
+            @test logdensityof(diagonal, x) == logdensityof(diagdense, x)
+            @test densityof(diagonal, x) == densityof(diagdense, x)
+        end
+
+        # And at `n = 2` so does the isotropic one, which is what the tolerance replaces.
+        if n == 2
+            for x in xs
+                @test logdensityof(isotropic, x) == logdensityof(isodense, x)
+                @test densityof(isotropic, x) == densityof(isodense, x)
+            end
+        end
     end
 
     #=
@@ -148,6 +186,7 @@ end
       own invalid cases: a zero diagonal entry divides by zero, a negative one takes the
       log of a negative number.
     =#
+    μ = [1.0, -2.0]
     for bad in (
         MvNormal(μ, Diagonal([0.0, 1.5])),
         MvNormal(μ, Diagonal([-1.0, 1.5])),
@@ -217,6 +256,37 @@ end
     x = big.([1.0, 2.0])
     full = logdensityof(MvNormal(big.([0, 0]), big.([2 0; 1 2])), x)
     @test abs(logdensityof(exact, x) - full) < 1e-70
+
+    #=
+      Rational parameters at a rational point: division stays exact, so the whitened
+      point and its sum of squares are `Rational` too. The `2π` term has to be converted
+      into the *floated* type, since a `Rational{Int}` holding `log2π` overflows on the
+      next addition and a `Rational{BigInt}` cannot hold it at all. All three factor
+      kinds go through the same line.
+    =#
+    rationals = (
+        (
+            MvNormal([0//1, 0//1], [1//1 0//1; 1//2 3//2]),
+            MvNormal([0.0, 0.0], [1.0 0.0; 0.5 1.5]),
+        ),
+        (
+            MvNormal([0//1, 0//1], Diagonal([1//1, 3//2])),
+            MvNormal([0.0, 0.0], Diagonal([1.0, 1.5])),
+        ),
+        (MvNormal([0//1, 0//1], (3//2) * I), MvNormal([0.0, 0.0], 1.5 * I)),
+    )
+    for (d, dfloat) in rationals
+        @test checkparams(d)
+        for x in ([1//3, 1//5], [2//7, -3//4], [0//1, 0//1])
+            v = logdensityof(d, x)
+            @test v isa Float64
+            @test v ≈ logdensityof(dfloat, float.(x))
+        end
+    end
+
+    # `Rational{BigInt}` fails in the conversion rather than overflowing after it.
+    dbig = MvNormal([big(0)//1, big(0)//1], [big(1)//1 big(0)//1; big(1)//2 big(3)//2])
+    @test logdensityof(dbig, [big(1)//3, big(1)//5]) isa BigFloat
 end
 
 @testset "construction never validates" begin

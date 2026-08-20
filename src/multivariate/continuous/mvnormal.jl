@@ -47,7 +47,10 @@ one dimension.
 
 A `Diagonal` or `UniformScaling` factor takes a shorter path. Whitening a general factor
 is a forward substitution, ``O(n^2)`` and sequential; a diagonal one is a single
-elementwise division. Nothing else changes: the same measure, computed more cheaply.
+elementwise division. It is the same measure, computed more cheaply, and the two paths
+agree to floating-point rounding rather than bit for bit: an isotropic
+``\\log \\det L`` is ``n \\log \\lambda`` where the general path adds ``\\log \\lambda``
+``n`` times, and for larger ``n`` the two can land a last bit apart.
 
 ```julia
 using LinearAlgebra
@@ -144,18 +147,21 @@ end
 end
 
 """
-    logdetfactor(d::MvNormal, ::Type{T}) -> T
+    logdetfactor(d::MvNormal, ::Type{T}) -> float(T)
 
-``\\log \\det L``, the sum of the logs of the diagonal, accumulated in `T`.
+``\\log \\det L``, the sum of the logs of the diagonal, accumulated in `float(T)`.
 
 Taking `T` from the caller keeps an exact factor from capping the term at `Float64` when
-the argument is wider, as `Normal` does with `σ`. `logt` keeps a non-positive diagonal
-from throwing. The isotropic case is ``n \\log \\lambda`` and needs no loop.
+the argument is wider, as `Normal` does with `σ`. The accumulator is `float(T)`, not `T`:
+a log is not exact, so an exact `T` would be rebound by the first term anyway, and
+`Rational` cannot hold one. `logt` keeps a non-positive diagonal from throwing. The
+isotropic case is ``n \\log \\lambda`` and needs no loop.
 """
 function logdetfactor(d::MvNormal, ::Type{T}) where {T}
-    acc = zero(T)
+    R = float(T)
+    acc = zero(R)
     for i in 1:length(d.μ)
-        acc += logt(convert(T, d.L[i, i]))
+        acc += logt(convert(R, d.L[i, i]))
     end
     return acc
 end
@@ -168,15 +174,16 @@ end
   same field, so this is the only place the general path leaked through.
 =#
 function logdetfactor(d::DiagMvNormal, ::Type{T}) where {T}
-    acc = zero(T)
+    R = float(T)
+    acc = zero(R)
     for σ in d.L.diag
-        acc += logt(convert(T, σ))
+        acc += logt(convert(R, σ))
     end
     return acc
 end
 
 function logdetfactor(d::IsoMvNormal, ::Type{T}) where {T}
-    return length(d.μ) * logt(convert(T, d.L.λ))
+    return length(d.μ) * logt(convert(float(T), d.L.λ))
 end
 
 #=
@@ -229,6 +236,7 @@ A scalar loop rather than `dot` of two views: every reverse-mode backend underst
 arithmetic, and the loop allocates nothing.
 """
 @inline function rowdot(L::AbstractMatrix, v::AbstractVector, i::Integer, k::Integer)
+    # A zero entry of `L` against an infinite `v` gives `NaN`, not an infinity.
     acc = L[i, 1] * v[1]
     for j in 2:k
         acc = muladd(L[i, j], v[j], acc)
@@ -295,8 +303,15 @@ function DensityInterface.logdensityof(d::MvNormal, x::AbstractVector{<:Number})
     # A mismatched shape has no density to return.
     shapesmatch(d, x) || return convert(_densitytype(d, x), NaN)
     q = sum(abs2, whiten(d, x))
+    #=
+      Float the type before converting `log2π`. Exact parameters at an exact point leave
+      `q` exact, and `Rational(log2π)` either overflows or throws. This is the promotion
+      the univariate measures get for free from `promote_rule(AbstractIrrational, T)`;
+      going through `typeof(q)` instead would cap a `Float32` argument at `Float64`.
+    =#
+    R = float(typeof(q))
     n = length(d.μ)
-    return -(q + n * oftype(q, log2π)) / 2 - logdetfactor(d, typeof(q))
+    return -(q + n * convert(R, log2π)) / 2 - logdetfactor(d, R)
 end
 
 #=
