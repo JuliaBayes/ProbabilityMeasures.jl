@@ -62,9 +62,8 @@ these, and they must hold:
     parameters, it returns a correctly-typed non-finite value (`-Inf` or `NaN`), so it
     can be called from inside a GPU kernel. Which non-finite value comes back is not
     part of the contract; use [`checkparams`](@ref) rather than `isnan` to detect
-    invalid parameters. A constraint that no type-generic tolerance can test, such as
-    [`Categorical`](@ref)'s sum-to-one, belongs to [`checkparams`](@ref) alone; the
-    measure that has one says so in its own docstring.
+    invalid parameters. Constraints that require a tolerance belong to
+    [`checkparams`](@ref).
  3. **No validation in constructors.** See [`checkparams`](@ref).
  4. **Parameters and arguments are bounded by `Number`, not `Real`.** This admits AD
     and tracing wrappers such as Reactant's `TracedRNumber`.

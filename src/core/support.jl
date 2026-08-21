@@ -68,17 +68,13 @@ Base.maximum(s::RealInterval) = s.b
 
 The consecutive integers ``\\{a, a+1, \\ldots, b\\}``.
 
-The endpoints are `Integer`s even when the measure's draws are floats, so that a caller
-can iterate the support. `b < a` describes the empty set.
+`b < a` describes the empty set.
 """
 struct IntegerRange{A<:Integer,B<:Integer} <: Support
     a::A
     b::B
 end
 
-#=
-  `isinteger` rejects `NaN` and `±Inf`, so no separate `isfinite` term is needed.
-=#
 insupport(s::IntegerRange, x::Number) = isinteger(x) & (x >= s.a) & (x <= s.b)
 
 Base.minimum(s::IntegerRange) = s.a

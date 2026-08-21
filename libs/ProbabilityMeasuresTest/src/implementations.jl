@@ -64,24 +64,13 @@ end
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
 ]
 
-#=
-  Hooks used by `test_totality` and `test_genericity`. A negative entry, a total mass of
-  zero and an empty vector all fail `checkparams` and fail differently. Each puts its
-  defect in the first category, which is where `test_totality` evaluates the density.
-
-  A probability vector with integer entries is necessarily a point mass, so the exact
-  instance can only be `[1]`. It still earns its place: it is what shows an `Int` element
-  type does not cap the result at `Float64`.
-=#
+# Invalid probability vectors used by totality checks.
 function _invalids(::Categorical)
     return (Categorical([-0.5, 1.5]), Categorical([0.0, 0.0]), Categorical(Float64[]))
 end
 _exactparams(::Categorical) = Categorical([1])
 
-#=
-  Every category, rather than quantiles of the cdf, which for a discrete measure repeat
-  and skip.
-=#
+# Test each category directly.
 default_testpoints(d::Categorical) = float.(eachindex(d.p))
 
 #=

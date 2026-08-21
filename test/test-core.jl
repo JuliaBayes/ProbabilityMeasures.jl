@@ -47,10 +47,7 @@ end
     @test !insupport(s, Inf)
     @test isbits(s)
 
-    #=
-      `IntegerRange` keeps `Integer` endpoints even where the draws are floats, so the
-      support can be iterated. A non-integer argument is outside it.
-    =#
+    # Integer ranges reject non-integer values.
     r = IntegerRange(1, 3)
     @test minimum(r) === 1
     @test maximum(r) === 3

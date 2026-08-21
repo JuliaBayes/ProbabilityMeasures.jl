@@ -5,16 +5,9 @@ using ForwardDiff: ForwardDiff
 using Random: Random, Xoshiro
 using Test
 
-#=
-  Run the conformance suite across parameter types and category counts.
-=#
+# Run conformance checks across parameter types and category counts.
 @testset "conformance" begin
-    #=
-      Distributions.jl is a test-only numerical reference. It takes an `Int` category and
-      promotes its probabilities, so widen here rather than comparing against its
-      rounding. Every probability below is exact in `Float32`, so the widening is lossless
-      and the comparison is about our numerics.
-    =#
+    # Distributions.jl takes integer categories and promotes its probabilities.
     reference_logpdf(m, x) =
         Distributions.logpdf(Distributions.Categorical(Float64.(m.p)), Int(x))
     measures = (
@@ -42,36 +35,24 @@ end
     @test typeof(Categorical(Float32[0.5, 0.5])) === Categorical{Vector{Float32}}
     @test typeof(Categorical(1:1)) === Categorical{UnitRange{Int}}
 
-    # A Float32 probability vector must not silently widen.
     @test Categorical(Float32[0.5, 0.5]).p isa Vector{Float32}
 
-    #=
-      Draws and quantiles are category indices in the float type the probabilities promote
-      to, not `Int`: an index cannot address memory under AD or tracing.
-    =#
+    # Category values use the promoted floating-point type.
     @test eltype(Categorical([0.5, 0.5])) === Float64
     @test eltype(Categorical(Float32[0.5, 0.5])) === Float32
     @test eltype(Categorical(1:1)) === Float64
 
-    #=
-      A `Vector` puts the probabilities on the heap, so a device kernel cannot capture
-      the measure by value. Any `AbstractVector` will do, and an `isbits` one restores
-      that.
-    =#
+    # The measure is `isbits` when its probability container is.
     @test !isbits(Categorical([0.5, 0.5]))
     @test isbits(Categorical(1:1))
 end
 
 @testset "precision follows the argument, not the parameters" begin
-    # A degenerate measure is the only probability vector with integer entries.
     @test logdensityof(Categorical([1]), 1.0f0) isa Float32
     @test logdensityof(Categorical([1]), big"1.0") isa BigFloat
     @test logdensityof(Categorical(Float32[0.25, 0.75]), 1.0) isa Float64
 
-    #=
-      Check that no Float64 intermediate caps BigFloat precision. `1/3` is not
-      representable, so the value is a real test of the widening.
-    =#
+    # Check that no Float64 intermediate caps BigFloat precision.
     third = big"1.0" / 3
     exact = logdensityof(Categorical([third, third, 1 - 2 * third]), big"1.0")
     @test exact isa BigFloat
@@ -79,35 +60,26 @@ end
 end
 
 @testset "construction never validates" begin
-    # Negative entries.
     d = Categorical([-0.5, 1.5])          # no throw
     @test !checkparams(d)
     @test isnan(logdensityof(d, 1.0))
 
-    # An empty vector places no mass anywhere.
     @test !checkparams(Categorical(Float64[]))
     @test logdensityof(Categorical(Float64[]), 1.0) == -Inf
 
-    # A non-finite entry.
     @test !checkparams(Categorical([NaN, 0.5, 0.5]))
 
     @test checkparams(Categorical([0.2, 0.3, 0.5]))
     @test checkparams(Categorical(Float32[0.25, 0.75]))
     @test checkparams(Categorical([1.0]))
 
-    #=
-      `checkparams` owns the sum-to-one requirement, and it is the only part of the
-      contract `logdensityof` cannot also enforce: no tolerance on the total is right at
-      every precision, since a vector assembled in `Float64` and widened carries its
-      original error with it. So an unnormalized `p` gives a finite density that is wrong
-      by a constant, and callers accepting user-supplied probabilities must validate.
-    =#
+    # Normalization is checked explicitly rather than during density evaluation.
     unnormalized = Categorical([0.5, 0.5, 0.5])
     @test !checkparams(unnormalized)
     @test isfinite(logdensityof(unnormalized, 1.0))
     @test !checkparams(Categorical([0.5, 0.4]))
 
-    # Float error in an assembled vector is tolerated, as in Distributions.jl.
+    # Allow ordinary summation error.
     tenth = fill(0.1, 10)
     @test sum(tenth) != 1.0
     @test checkparams(Categorical(tenth))
@@ -129,7 +101,6 @@ end
     @test !insupport(d, NaN)
     @test !insupport(d, Inf)
 
-    # An empty `p` describes the empty support.
     @test support(Categorical(Float64[])) === IntegerRange(1, 0)
     @test !insupport(Categorical(Float64[]), 1.0)
 end
@@ -139,7 +110,6 @@ end
     for x in (0.0, 4.0, 2.5, -1.0, Inf, -Inf, NaN, floatmax(Float64))
         @test logdensityof(d, x) == -Inf
     end
-    # Both endpoints carry mass.
     @test isfinite(logdensityof(d, 1.0))
     @test isfinite(logdensityof(d, 3.0))
 end
@@ -171,7 +141,7 @@ end
 
 @testset "distribution functions step at the categories" begin
     d = Categorical([0.2, 0.3, 0.5])
-    # Constant between categories, since no mass sits there.
+    # The CDF is constant between categories.
     @test cdf(d, 1.0) == cdf(d, 1.999) == 0.2
     @test ccdf(d, 1.0) == ccdf(d, 1.999)
     @test ccdf(d, 1.0) ≈ 0.8
@@ -180,10 +150,10 @@ end
     @test logcdf(d, 0.0) == -Inf
     @test logccdf(d, 3.0) == -Inf
 
-    # `quantile` inverts `cdf` exactly at every category, not just to within a rounding.
+    # `quantile` inverts `cdf` at each category.
     @test [quantile(d, cdf(d, x)) for x in 1.0:3.0] == [1.0, 2.0, 3.0]
 
-    # Total for a probability outside [0, 1].
+    # Out-of-range probabilities still return a category.
     for q in (-0.001, 1.001, -Inf, Inf, NaN)
         @test insupport(d, quantile(d, q))
     end
@@ -191,7 +161,7 @@ end
 
 @testset "log-density gradient with respect to p" begin
     p = [0.2, 0.3, 0.5]
-    # The gradient of `log p[x]` is `1/p[x]` in the x-th coordinate and zero elsewhere.
+    # The gradient of `log(p[x])` is nonzero only at `x`.
     for x in eachindex(p)
         g = ForwardDiff.gradient(q -> logdensityof(Categorical(q), float(x)), p)
         expected = zeros(length(p))
@@ -201,12 +171,7 @@ end
 end
 
 @testset "a draw has no pathwise derivative" begin
-    #=
-      A category index is a piecewise-constant function of `p`, so a draw carries no
-      derivative with respect to it. This is why the conformance suite skips its
-      `reparameterized rand` block for a discrete measure, and why a PPL has to reach for
-      a score-function estimator here rather than a pathwise one.
-    =#
+    # A categorical draw is piecewise constant in `p`.
     g = ForwardDiff.gradient(q -> rand(Xoshiro(7), Categorical(q)), [0.2, 0.3, 0.5])
     @test all(iszero, g)
 end
@@ -223,7 +188,6 @@ end
     Random.rand!(Xoshiro(1), v, d)
     @test all(x -> insupport(d, x), v)
 
-    # A degenerate measure can only draw its one category.
     @test all(==(1.0), rand(Xoshiro(1), Categorical([1.0]), 16))
 
     # Inverse-cdf sampling from uniform noise reproduces the category probabilities.

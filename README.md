@@ -68,10 +68,8 @@ than throwing.
 - `rand` and Random's array-sampling methods
 - `params`, `support`, `insupport`, and `checkparams`
 
-`Categorical(p)` places mass on `1:length(p)` with respect to counting measure. Its
-draws and quantiles are category indices returned in the float type the probabilities
-promote to, rather than as `Int`, since an index cannot address memory under AD or
-tracing:
+`Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
+and quantiles use the promoted floating-point type of `p`:
 
 ```julia
 julia> d = Categorical([0.2, 0.3, 0.5]);
@@ -150,13 +148,12 @@ xs = Reactant.to_rarray(randn(1000))
 
 Scalar sampling is reparameterized: noise is drawn in the underlying floating-point
 type and the measure parameters enter through arithmetic. This allows derivatives with
-respect to the parameters without custom derivative rules. A discrete draw is a
-category index, piecewise constant in the parameters, so `Categorical` has no such
-derivative; its log-density gradient is still exact.
+respect to the parameters without custom derivative rules. Categorical draws do not
+have a pathwise derivative, but their log-density is differentiable with respect to
+the probabilities.
 
-A measure whose parameters are all scalars is `isbits`, so a device kernel can capture
-it by value. `Categorical` holds its probabilities in an `AbstractVector`, so pass an
-`isbits` vector type such as a `StaticArrays.SVector` to get the same guarantee.
+`Categorical` accepts any `AbstractVector`. Use an `isbits` vector type, such as
+`StaticArrays.SVector`, when the complete measure must be `isbits`.
 
 ## Defining a measure
 
