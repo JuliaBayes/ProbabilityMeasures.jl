@@ -15,6 +15,12 @@ using Test
     @test d isa UnivariateMeasure
     @test d isa ContinuousMeasure
     @test !(d isa DiscreteMeasure)
+
+    k = Categorical([0.5, 0.5])
+    @test k isa AbstractProbabilityMeasure{Univariate,Discrete}
+    @test k isa DiscreteUnivariateMeasure
+    @test k isa DiscreteMeasure
+    @test !(k isa ContinuousMeasure)
 end
 
 @testset "support" begin
@@ -40,6 +46,22 @@ end
     @test !insupport(s, 2.5)
     @test !insupport(s, Inf)
     @test isbits(s)
+
+    #=
+      `IntegerRange` keeps `Integer` endpoints even where the draws are floats, so the
+      support can be iterated. A non-integer argument is outside it.
+    =#
+    r = IntegerRange(1, 3)
+    @test minimum(r) === 1
+    @test maximum(r) === 3
+    @test insupport(r, 2)
+    @test insupport(r, 2.0)
+    @test !insupport(r, 2.5)
+    @test !insupport(r, 0)
+    @test !insupport(r, 4)
+    @test !insupport(r, NaN)
+    @test !insupport(r, Inf)
+    @test isbits(r)
 
     # Vector support checks both length and values.
     v = RealVectors(2)

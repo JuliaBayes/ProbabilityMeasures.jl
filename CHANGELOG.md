@@ -12,8 +12,9 @@ and this project adheres to [Semantic Versioning].
 - `AbstractProbabilityMeasure{F,S}` and the normalized-only measure interface:
   `logdensityof`, `rand`, `support`, `insupport`, `params`, `checkparams`, and the
   moment/distribution-function surface.
-- The `RealLine`, `NonNegativeReals`, `RealInterval` and `RealVectors` supports.
-  `PositiveReals` and `UnitInterval` will arrive with the first measure that needs one.
+- The `RealLine`, `NonNegativeReals`, `RealInterval`, `IntegerRange` and `RealVectors`
+  supports. `PositiveReals` and `UnitInterval` will arrive with the first measure that
+  needs one.
 - `Normal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with heterogeneous
   parameter types and no promotion or validation at construction.
 - `MvNormal(μ, L)`, the first multivariate measure, with the
@@ -32,6 +33,11 @@ and this project adheres to [Semantic Versioning].
   Both are the *factor*, so they carry standard deviations: `MvNormal(μ, σ * I)` is
   Distributions.jl's `MvNormal(μ, σ² * I)`. That divergence is the price of one
   consistent rule across all three forms, and it is called out in the docstring.
+- `Categorical(p)`, the first discrete measure, with the `DiscreteUnivariateMeasure`
+  alias it dispatches on. Its probabilities live in any `AbstractVector`, and its draws
+  and quantiles are category indices in the float type those probabilities promote to,
+  so that one code path serves AD and tracing backends. `checkparams` owns the
+  sum-to-one requirement, as in Distributions.jl.
 - `libs/ProbabilityMeasuresTest`: a reusable conformance suite (`test_measure`)
   covering interface conformance, totality, type genericity, type stability,
   zero allocations, normalization, cdf/quantile, moments, four AD backends, and
@@ -40,12 +46,23 @@ and this project adheres to [Semantic Versioning].
 
 ### Notes
 
-- The conformance suite's allocation, moment and GPU-broadcast blocks are written
-  around a scalar draw and now run only for univariate measures, and its `isbits`
-  requirement only for a measure whose parameters are all scalars. A measure the
-  defaults skip is still checked, in its own test file: `test/test-mvnormal.jl`
-  carries a two-dimensional quadrature for normalization, a Monte Carlo check of the
-  mean and covariance, and a bound on what the density allocates.
+- The conformance suite now flattens and unflattens parameters of any shape, so its AD
+  and genericity blocks treat every measure as one parameter vector, and gates the
+  blocks a measure cannot meet:
+
+    - the allocation and moment blocks, written around a scalar draw, and the GPU
+      broadcast run for univariate measures;
+    - the `isbits` requirement runs for a measure whose parameters are all scalars;
+    - normalization is a quadrature for a continuous measure and a summation for a
+      discrete one;
+    - the pathwise-derivative check runs for a measure whose draws are
+      reparameterizable. A discrete draw is piecewise constant in the parameters, so it
+      has none; its log-density gradient is still checked under every backend.
+
+  A measure the defaults skip is still checked, in its own test file:
+  `test/test-mvnormal.jl` carries a two-dimensional quadrature for normalization, a
+  Monte Carlo check of the mean and covariance, and a bound on what the density
+  allocates.
 - `MvNormal`'s `logdensityof` allocates, unlike the univariate measures'. Whitening
   needs a temporary, grown by `vcat` so that reverse-mode backends, which reject array
   mutation, can differentiate it.

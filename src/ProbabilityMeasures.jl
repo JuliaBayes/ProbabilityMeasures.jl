@@ -28,6 +28,8 @@ include("univariate/continuous/normal.jl")
 include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 
+include("univariate/discrete/categorical.jl")
+
 include("multivariate/continuous/mvnormal.jl")
 
 #=
@@ -39,10 +41,12 @@ include("multivariate/continuous/mvnormal.jl")
 export AbstractProbabilityMeasure
 export VariateForm, Univariate, Multivariate
 export ValueSupport, Continuous, Discrete
-export ContinuousUnivariateMeasure, ContinuousMultivariateMeasure
+export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
+export ContinuousMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, RealVectors, support, insupport
+export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange, RealVectors
+export support, insupport
 
 # Interface
 export checkparams, noisetype, basefloat
@@ -60,6 +64,7 @@ export mean, var, std, median, quantile, cov
 export Normal
 export Exponential
 export Uniform
+export Categorical
 export MvNormal
 
 end

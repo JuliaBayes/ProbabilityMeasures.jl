@@ -11,7 +11,7 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements the univariate normal,
-exponential, and uniform measures, and the multivariate normal.
+exponential, uniform, and categorical measures, and the multivariate normal.
 
 ## Installation
 
@@ -60,13 +60,31 @@ than throwing.
 
 ## Available API
 
-`Normal(μ, σ)`, `Exponential(θ)`, and `Uniform(a, b)` each support:
+`Normal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`, and `Categorical(p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
 - `quantile`, `mean`, `median`, `var`, `std`, and `entropy`
 - `rand` and Random's array-sampling methods
 - `params`, `support`, `insupport`, and `checkparams`
+
+`Categorical(p)` places mass on `1:length(p)` with respect to counting measure. Its
+draws and quantiles are category indices returned in the float type the probabilities
+promote to, rather than as `Int`, since an index cannot address memory under AD or
+tracing:
+
+```julia
+julia> d = Categorical([0.2, 0.3, 0.5]);
+
+julia> quantile(d, 0.5)
+2.0
+
+julia> rand(d) isa Float64
+true
+
+julia> logdensityof(d, 2.0), logdensityof(d, 2.5)
+(-1.2039728043259361, -Inf)
+```
 
 `MvNormal(μ, L)` takes a lower-triangular covariance factor, so `cov(d) == L * L'`.
 If you have a covariance matrix, factor it before constructing the measure.
@@ -132,7 +150,13 @@ xs = Reactant.to_rarray(randn(1000))
 
 Scalar sampling is reparameterized: noise is drawn in the underlying floating-point
 type and the measure parameters enter through arithmetic. This allows derivatives with
-respect to the parameters without custom derivative rules.
+respect to the parameters without custom derivative rules. A discrete draw is a
+category index, piecewise constant in the parameters, so `Categorical` has no such
+derivative; its log-density gradient is still exact.
+
+A measure whose parameters are all scalars is `isbits`, so a device kernel can capture
+it by value. `Categorical` holds its probabilities in an `AbstractVector`, so pass an
+`isbits` vector type such as a `StaticArrays.SVector` to get the same guarantee.
 
 ## Defining a measure
 
@@ -172,8 +196,8 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 
 ## Current scope
 
-ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, `Uniform`, and
-`MvNormal`. Discrete measures, transformed or composite measures, and Distributions.jl
+ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, `Uniform`,
+`Categorical`, and `MvNormal`. Transformed or composite measures and Distributions.jl
 interoperability are not implemented yet.
 
 ## Citation
