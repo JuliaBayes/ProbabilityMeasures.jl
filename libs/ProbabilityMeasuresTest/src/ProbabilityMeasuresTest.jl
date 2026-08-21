@@ -19,7 +19,7 @@ using ProbabilityMeasures
   Unexported dispatch aliases. The conditional `check_*` defaults ask what kind of
   measure `d` is, and `isa ContinuousMeasure` is the idiom the package itself uses.
 =#
-using ProbabilityMeasures: ContinuousMeasure, UnivariateMeasure
+using ProbabilityMeasures: ContinuousMeasure, DiscreteMeasure, UnivariateMeasure
 #=
   `unwhiten` maps standard normal coordinates back, which is how `MvNormal`'s default test
   points are built. The two aliases are what the structured factors dispatch on, so that

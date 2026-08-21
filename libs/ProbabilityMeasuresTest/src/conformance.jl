@@ -30,7 +30,8 @@ end
 
 #=
   Flatten parameters into a floating-point vector for numerical differentiation and
-  AD. Integer parameters cannot be perturbed or tracked directly.
+  AD. Integer parameters cannot be perturbed or tracked directly. Array parameters
+  flatten alongside the scalar ones, so no measure needs its own method.
 =#
 _paramvec(d) = reduce(vcat, map(_flatten, values(params(d))))
 
@@ -109,10 +110,16 @@ Each block checks a package guarantee.
 Interface conformance, totality, type genericity, inference, and AD run for every
 measure. Other checks are capability-dependent:
 
-  - normalization runs for continuous univariate measures with bounded endpoints;
+  - normalization runs for univariate measures with bounded endpoints, by quadrature for
+    a continuous one and by summation for a discrete one;
   - CDF checks run when those optional methods are implemented;
-  - the allocation, moment and GPU blocks are written around a scalar draw and run for
+  - the allocation and moment blocks are written around a scalar draw and run for
     univariate measures;
+  - the GPU block runs for univariate measures, and requires `isbits` of one whose
+    parameters are all scalars;
+  - the type-mixing sweep runs for a measure carrying more than one parameter;
+  - the pathwise-derivative block runs for a measure whose draws are reparameterizable,
+    which a discrete measure's are not;
   - Reactant checks run when its extension is loaded.
 
 Checks skipped by these defaults belong in the measure's own test file.
@@ -130,7 +137,7 @@ function test_measure(
     check_genericity::Bool=true,
     check_inference::Bool=true,
     check_allocations::Bool=_can_check_allocations(d),
-    check_normalization::Bool=_can_integrate(d),
+    check_normalization::Bool=_can_integrate(d) || _can_enumerate(d),
     check_cdf::Bool=_has_cdf(d),
     check_moments::Bool=_can_check_moments(d),
     check_ad::Bool=true,
@@ -176,9 +183,42 @@ end
 function _can_integrate(d)
     d isa ContinuousMeasure || return false
     d isa UnivariateMeasure || return false
-    s = support(d)
-    return hasmethod(minimum, Tuple{typeof(s)}) && hasmethod(maximum, Tuple{typeof(s)})
+    return _bounded(support(d))
 end
+
+#=
+  A discrete univariate measure with both endpoints has its total mass available as a
+  sum over the support, which is the discrete counterpart of quadrature.
+=#
+function _can_enumerate(d)
+    d isa DiscreteMeasure || return false
+    d isa UnivariateMeasure || return false
+    return _bounded(support(d))
+end
+
+#=
+  Whether the support offers both endpoints. `hasmethod` is not enough: Base has a
+  `minimum` for any iterable, so it answers yes even for `RealVectors`, which has no
+  endpoints and throws. `_dispatches_on` requires a method of its own.
+=#
+function _bounded(s)
+    return _dispatches_on(minimum, (typeof(s),)) && _dispatches_on(maximum, (typeof(s),))
+end
+
+#=
+  Whether the parameters of `d` are all scalars. The checks that sweep parameter types
+  independently of one another, and the one that requires a measure to be `isbits`, only
+  apply to such a measure: a parameter held in a mutable vector has a single element
+  type and lives on the heap.
+=#
+_has_scalar_params(d) = all(T -> T <: Number, fieldtypes(typeof(d)))
+
+#=
+  Whether a draw from `d` can be written as a differentiable function of the parameters.
+  A discrete draw is a category index, piecewise constant in the parameters, so it has
+  no pathwise derivative to check.
+=#
+_is_reparameterized(d) = !(d isa DiscreteMeasure)
 
 #=
   `hasmethod` also sees Statistics' generic iterator methods on `Any`. Require the
@@ -216,9 +256,11 @@ end
 _can_check_allocations(d) = d isa UnivariateMeasure
 
 #=
-  The generic GPU test broadcasts over scalar points and captures an `isbits` measure.
+  The generic GPU test broadcasts over scalar points, so it wants a univariate measure.
+  It does not additionally require `isbits`: the broadcast is worth checking either way,
+  and `test_gpu` asks for `isbits` only of a measure whose parameters are all scalars.
 =#
-_can_gpu(d) = (d isa UnivariateMeasure) && isbits(_withtype(d, Float32))
+_can_gpu(d) = d isa UnivariateMeasure
 
 "Evaluation points spanning the bulk and both tails of `d`."
 function default_testpoints(d)
@@ -269,6 +311,7 @@ function test_genericity(d, xs, types)
 
     #=
       Build mixed parameters field by field because a vector would promote them first.
+      A parameter held in an array has one element type anyway.
     =#
     mixed = _mixedparams(d)
     if mixed !== nothing
@@ -338,6 +381,15 @@ function test_normalization(d)
 end
 
 #=
+  A discrete measure's total mass is a sum over its support rather than an integral, and
+  an exact one, so it needs no quadrature error term.
+=#
+function test_normalization(d::DiscreteMeasure)
+    s = support(d)
+    @test sum(x -> densityof(d, float(x)), minimum(s):maximum(s)) ≈ 1
+end
+
+#=
   Widen integration limits to at least `Float64` so QuadGK can meet the requested
   tolerance.
 =#
@@ -399,11 +451,18 @@ function test_cdf(d, xs)
     #=
       And as precise. A Float64 intermediate anywhere in the chain caps this at
       ~1e-17 instead of full BigFloat precision.
+
+      `cdf ∘ quantile` is the identity only where the cdf is continuous and strictly
+      increasing. A discrete cdf jumps, and `cdf(d, quantile(d, p))` is the mass up to
+      the category `p` lands in, which overshoots `p` by an amount that says nothing
+      about precision.
     =#
-    setprecision(BigFloat, 256) do
-        dbig = _withtype(d, BigFloat)
-        p = big"0.25"
-        @test abs(cdf(dbig, quantile(dbig, p)) - p) < 1e-60
+    if d isa ContinuousMeasure
+        setprecision(BigFloat, 256) do
+            dbig = _withtype(d, BigFloat)
+            p = big"0.25"
+            @test abs(cdf(dbig, quantile(dbig, p)) - p) < 1e-60
+        end
     end
 
     #=
@@ -433,7 +492,7 @@ end
 
 # Automatic differentiation.
 
-function test_ad(d, xs, backends)
+function test_ad(d, xs, backends; check_reparameterization=_is_reparameterized(d))
     x = first(xs)
     p0 = _paramvec(d)
     #=
@@ -446,18 +505,26 @@ function test_ad(d, xs, backends)
 
     #=
       Reduce vector draws to a scalar before differentiating. Keep the original
-      parameter type so the reference and AD calls draw the same noise.
+      parameter type so the reference and AD calls draw the same noise. A measure whose
+      draws admit no reparameterized form leaves `check_reparameterization` false and
+      checks only the gradient above.
     =#
     draw = p -> _scalarize(rand(Xoshiro(7), _reconstruct(d, p)))
-    draw_reference = FiniteDifferences.grad(central_fdm(5, 1), draw, p0)[1]
+    draw_reference = if check_reparameterization
+        FiniteDifferences.grad(central_fdm(5, 1), draw, p0)[1]
+    else
+        nothing
+    end
 
     for backend in backends
         @testset "$(nameof(typeof(backend)))" begin
             g = DifferentiationInterface.gradient(f, backend, p0)
             @test g ≈ reference rtol = 1e-5 atol = 1e-8
-            @testset "reparameterized rand" test_reparameterization(
-                draw, p0, draw_reference, backend
-            )
+            if check_reparameterization
+                @testset "reparameterized rand" test_reparameterization(
+                    draw, p0, draw_reference, backend
+                )
+            end
         end
     end
 end
@@ -484,7 +551,13 @@ function test_gpu(d, xs)
     x32 = Float32.(xs)
     expected = logdensityof.(d32, x32)
 
-    @test isbits(d32)  # a non-isbits measure cannot be captured by a kernel
+    #=
+      A device kernel captures the measure by value, so a scalar-parameter measure has to
+      be `isbits`. One holding its parameters in a `Vector` cannot be, and it is up to the
+      caller to supply an `isbits` vector type on device; the broadcast below still has to
+      work either way.
+    =#
+    _has_scalar_params(d) && @test isbits(d32)
 
     #=
       `allowscalar` only takes a do-block for *permitting* scalar indexing; forbidding
