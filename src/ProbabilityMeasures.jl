@@ -34,6 +34,7 @@ include("univariate/discrete/bernoulli.jl")
 include("univariate/discrete/binomial.jl")
 
 include("multivariate/continuous/mvnormal.jl")
+include("multivariate/discrete/multinomial.jl")
 
 # Export the operations commonly needed by probabilistic programs.
 
@@ -42,10 +43,11 @@ export AbstractProbabilityMeasure
 export VariateForm, Univariate, Multivariate
 export ValueSupport, Continuous, Discrete
 export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
-export ContinuousMultivariateMeasure
+export ContinuousMultivariateMeasure, DiscreteMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange, RealVectors
+export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange, IntegerSimplex
+export RealVectors
 export support, insupport
 
 # Interface
@@ -66,5 +68,6 @@ export Categorical
 export Bernoulli
 export Binomial
 export MvNormal
+export Multinomial
 
 end
