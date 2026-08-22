@@ -183,11 +183,12 @@ function _can_integrate(d)
     return _bounded(support(d))
 end
 
-# Discrete normalization requires known endpoints.
+# Discrete normalization requires finite endpoints.
 function _can_enumerate(d)
     d isa DiscreteMeasure || return false
     d isa UnivariateMeasure || return false
-    return _bounded(support(d))
+    s = support(d)
+    return _bounded(s) && isfinite(minimum(s)) && isfinite(maximum(s))
 end
 
 # Ignore Base's generic methods when checking for support bounds.

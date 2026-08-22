@@ -39,6 +39,14 @@ insupport(::NonNegativeReals, x::Number) = isfinite(x) & (x >= zero(x))
 Base.minimum(::NonNegativeReals) = 0.0
 Base.maximum(::NonNegativeReals) = Inf
 
+"The non-negative integers, ``\\{0, 1, \\ldots\\}``."
+struct NonNegativeIntegers <: Support end
+
+insupport(::NonNegativeIntegers, x::Number) = isfinite(x) & isinteger(x) & (x >= zero(x))
+
+Base.minimum(::NonNegativeIntegers) = 0
+Base.maximum(::NonNegativeIntegers) = Inf
+
 """
     RealInterval(a, b)
 

@@ -32,6 +32,7 @@ include("univariate/continuous/laplace.jl")
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
 include("univariate/discrete/binomial.jl")
+include("univariate/discrete/geometric.jl")
 
 include("multivariate/continuous/mvnormal.jl")
 
@@ -45,7 +46,8 @@ export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
 export ContinuousMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange, RealVectors
+export Support, RealLine, NonNegativeReals, NonNegativeIntegers, RealInterval
+export IntegerRange, RealVectors
 export support, insupport
 
 # Interface
@@ -65,6 +67,7 @@ export Laplace
 export Categorical
 export Bernoulli
 export Binomial
+export Geometric
 export MvNormal
 
 end
