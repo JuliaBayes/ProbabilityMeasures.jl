@@ -12,9 +12,9 @@ and this project adheres to [Semantic Versioning].
 - `AbstractProbabilityMeasure{F,S}` and the normalized-only measure interface:
   `logdensityof`, `rand`, `support`, `insupport`, `params`, `checkparams`, and the
   moment/distribution-function surface.
-- The `RealLine`, `NonNegativeReals`, `RealInterval`, `IntegerRange` and `RealVectors`
-  supports. `PositiveReals` and `UnitInterval` will arrive with the first measure that
-  needs one.
+- The `RealLine`, `NonNegativeReals`, `NonNegativeIntegers`, `RealInterval`,
+  `IntegerRange` and `RealVectors` supports. `PositiveReals` and `UnitInterval` will
+  arrive with the first measure that needs one.
 - `Normal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with heterogeneous
   parameter types and no promotion or validation at construction.
 - `MvNormal(μ, L)`, the first multivariate measure, with the
@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning].
   lengths. Its entropy, CDFs and quantile have no closed form and sum over the support
   in fixed-length loops, which keeps them traceable and GPU-safe, and each CDF tail is
   summed directly so a small tail is not lost to subtraction from one.
+- `Geometric(p)`, counting failures before the first success on the non-negative
+  integers.
 - `Laplace(μ, b)`, whose density has a kink at `x = μ`. `logcdf` and `logccdf`
   compute the near tail directly, so they stay finite where `cdf` and `ccdf` underflow,
   and the reparameterized draw is the difference of two exponential samples.

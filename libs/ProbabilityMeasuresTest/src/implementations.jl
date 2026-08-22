@@ -88,6 +88,14 @@ function default_testpoints(d::Binomial)
     return [float(k) for k in 0:(d.n) if invertible(k)]
 end
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Geometric [
+    Geometric(0.3), Geometric(0.5), Geometric(0.6f0)
+]
+
+_invalids(::Geometric) = (Geometric(0.0), Geometric(-0.5), Geometric(Inf), Geometric(NaN))
+
+_exactparams(::Geometric) = Geometric(1//2)
+
 # Optional methods for multivariate measures.
 const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
 
