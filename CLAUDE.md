@@ -3,6 +3,13 @@
 Rules for writing code in this repository. They are about *style*, not architecture:
 how code reads, not how it is organized.
 
+Before writing or editing comments and docstrings, read the surrounding file and
+match its tone, structure, and level of detail. Use plain, direct language. Explain
+surprising behavior, constraints, and choices that a reader could not infer from the
+code. Do not restate obvious code, speculate about future work, or add background
+that does not help someone use or maintain the package. Keep the shortest wording
+that preserves the useful detail.
+
 ## Comments
 
 **Multi-line comments use `#= =#`.** A stack of `#` lines is not idiomatic Julia.
