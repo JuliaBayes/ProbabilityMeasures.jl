@@ -1,11 +1,7 @@
 """
     VariateForm
 
-Trait describing the shape of a single draw from a measure: [`Univariate`](@ref) or
-[`Multivariate`](@ref).
-
-There is no `Matrixvariate`. Adding a variate form later is a non-breaking change,
-so it can wait until a measure needs one.
+Describes the shape of one sample: [`Univariate`](@ref) or [`Multivariate`](@ref).
 """
 abstract type VariateForm end
 
@@ -18,7 +14,7 @@ struct Multivariate <: VariateForm end
 """
     ValueSupport
 
-Trait describing whether draws are [`Continuous`](@ref) or [`Discrete`](@ref).
+Describes whether samples are [`Continuous`](@ref) or [`Discrete`](@ref).
 """
 abstract type ValueSupport end
 
@@ -33,9 +29,7 @@ struct Discrete <: ValueSupport end
 
 Supertype for all probability measures.
 
-Every subtype is a *normalized* measure: its density integrates to one against the
-measure implied by its [`ValueSupport`](@ref), Lebesgue for [`Continuous`](@ref) and
-counting for [`Discrete`](@ref). `logdensityof` returns the normalized value.
+Every subtype is normalized: its density integrates or sums to one.
 
 # Type parameters
 
@@ -51,32 +45,26 @@ counting for [`Discrete`](@ref). `logdensityof` returns the normalized value.
 
 [`insupport`](@ref), [`params`](@ref) and the moment functions all have fallbacks.
 
-# Invariants
+# Rules for implementations
 
-The conformance suite (`ProbabilityMeasuresTest.test_measure`, in `libs/`) enforces
-these, and they must hold:
+The conformance suite (`ProbabilityMeasuresTest.test_measure` in `libs/`) checks these
+rules:
 
- 1. **Type genericity.** The result type is
+ 1. **Numeric types.** The result type is
     `float(promote_type(<parameter types>..., typeof(x)))`.
- 2. **Totality.** `logdensityof` never throws. Outside the support, and for invalid
-    parameters, it returns a correctly-typed non-finite value (`-Inf` or `NaN`), so it
-    can be called from inside a GPU kernel. Which non-finite value comes back is not
-    part of the contract; use [`checkparams`](@ref) rather than `isnan` to detect
-    invalid parameters. Constraints that require a tolerance belong to
-    [`checkparams`](@ref).
- 3. **No validation in constructors.** See [`checkparams`](@ref).
- 4. **Parameters and arguments are bounded by `Number`, not `Real`.** This admits AD
-    and tracing wrappers such as Reactant's `TracedRNumber`.
- 5. **No branching on a value.** A comparison between traced values is itself traced
-    and cannot drive `?:`, `&&` or `||`. Use `&`/`|` for predicates and
-    `ProbabilityMeasures.select` for a two-way branch, whose arms must both be total.
+ 2. **No errors from `logdensityof`.** Outside the support or with invalid parameters,
+    return a non-finite value of the right type. Use [`checkparams`](@ref), not `isnan`,
+    to detect invalid parameters.
+ 3. **Constructors do not validate.** See [`checkparams`](@ref).
+ 4. **Parameters and arguments use `Number` rather than `Real`.** This allows wrapped
+    numeric values used by automatic differentiation and tracing tools.
+ 5. **Do not use values to drive Julia branches.** Wrapped comparisons may not produce
+    a `Bool`. Use `&` and `|` for predicates and `ProbabilityMeasures.select` for a
+    two-way choice. Both choices must be safe to evaluate.
 """
 abstract type AbstractProbabilityMeasure{F<:VariateForm,S<:ValueSupport} end
 
-#=
-  Dispatch aliases used by measure implementations and interface fallbacks. Only the
-  three a measure declares itself a subtype of are exported.
-=#
+# Short names used by implementations and interface fallbacks.
 const UnivariateMeasure{S} = AbstractProbabilityMeasure{Univariate,S}
 const MultivariateMeasure{S} = AbstractProbabilityMeasure{Multivariate,S}
 const ContinuousMeasure{F} = AbstractProbabilityMeasure{F,Continuous}
@@ -85,8 +73,5 @@ const ContinuousUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Contin
 const DiscreteUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Discrete}
 const ContinuousMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Continuous}
 
-#=
-  Treat measures as scalars during broadcast. Device broadcasts can then capture an
-  `isbits` measure by value and fuse without a separate batched path.
-=#
+# Reuse the same measure for every value in a broadcast.
 Base.broadcastable(d::AbstractProbabilityMeasure) = Ref(d)

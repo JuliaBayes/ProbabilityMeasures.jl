@@ -1,41 +1,27 @@
-#=
-  The generic surface every measure inherits. Anything here either has a correct
-  fallback or is documented as mandatory in `AbstractProbabilityMeasure`.
-=#
-
 DensityInterface.DensityKind(::AbstractProbabilityMeasure) = DensityInterface.HasDensity()
 
 """
     params(d) -> NamedTuple
 
-The parameters of `d`, keyed by field name.
-
-The default returns the fields as a `NamedTuple`, allowing callers to address
-parameters by name.
+Return the fields of `d` as a named tuple.
 """
 @inline function StatsAPI.params(d::D) where {D<:AbstractProbabilityMeasure}
-    # `D` is a type parameter, so this folds to constants and compiles to a struct load.
     return NamedTuple{fieldnames(D)}(ntuple(i -> getfield(d, i), Val(fieldcount(D))))
 end
 
 """
     checkparams(d) -> Bool
 
-Whether `d`'s parameters are valid, for example a positive scale.
+Return whether `d` has valid parameters.
 
-Constructors in this package do not validate. Validation is explicit so construction
-can remain usable inside compiled kernels and PPL inner loops.
-
-For invalid parameters, `logdensityof` returns a non-finite value rather than
-throwing.
-
-Use this function rather than `isnan(logdensityof(d, x))`: an invalid measure may
-produce `-Inf` rather than `NaN`.
+Constructors do not validate. Invalid parameters make `logdensityof` return `-Inf` or
+`NaN` rather than throwing, so use `checkparams` instead of checking for one specific
+non-finite value.
 
 # Examples
 
 ```julia
-d = Normal(0.0, -1.0)     # constructs fine, no error
+d = Normal(0.0, -1.0)     # construction does not throw
 checkparams(d)            # false
 logdensityof(d, 0.0)      # NaN, not a DomainError
 ```
@@ -45,18 +31,11 @@ checkparams(::AbstractProbabilityMeasure) = true
 """
     validateparams(d) -> d
 
-Return `d`, or throw a `DomainError` if [`checkparams`](@ref) rejects its parameters.
+Return `d`, or throw a `DomainError` when [`checkparams`](@ref) rejects it.
 
-For the boundary where user-supplied parameters enter, since constructors do not
-validate. It branches on a value and throws, so it can be neither traced nor called from
-a device kernel: use it once on the way in, never inside a model.
-
-Reaching for this is worth it where an invalid measure would otherwise go unnoticed.
-[`Categorical`](@ref)'s sum-to-one is the case in point: a `p` that does not sum to one
-gives a *finite* log-density, too large by `log(sum(p))` for every category, so unlike a
-negative scale it does not announce itself. A constant offset also cancels in a
-Metropolis-Hastings ratio, which hides it further until `p` starts varying with the
-parameters being inferred.
+Call this once when user input enters a program, not inside a model or GPU kernel.
+This is especially important when invalid parameters can still produce finite
+densities, such as categorical probabilities that do not sum to one.
 
 # Examples
 
@@ -73,21 +52,16 @@ end
 """
     noisetype(d) -> Type{<:AbstractFloat}
 
-The untracked float type used to draw noise for a reparameterized sample from `d`.
+The plain floating-point type used to draw random noise for `d`.
 """
 @inline function noisetype(d::D) where {D<:AbstractProbabilityMeasure}
     return basefloat(_promoted_paramtype(D))
 end
 
-# Promote scalar parameters and array element types.
 @inline function _promoted_paramtype(::Type{D}) where {D<:AbstractProbabilityMeasure}
     return promote_type(ntuple(i -> eltype(fieldtype(D, i)), Val(fieldcount(D)))...)
 end
 
-#=
-  Array sampling routes through Random's sampler machinery to the scalar
-  `Base.rand(rng, d)` implementation.
-=#
 function Random.rand(
     rng::AbstractRNG, sp::Random.SamplerTrivial{<:AbstractProbabilityMeasure}
 )
@@ -95,11 +69,6 @@ function Random.rand(
 end
 
 Base.rand(d::AbstractProbabilityMeasure) = rand(Random.default_rng(), d)
-
-#=
-  Extend Statistics for standard summaries; `entropy` is the only package-specific
-  summary currently needed by PPL workloads.
-=#
 
 """
     entropy(d)
@@ -137,19 +106,11 @@ function logcdf end
 """
 function logccdf end
 
-#=
-  Generic fallbacks for measures that define the corresponding primitive.
-=#
 ccdf(d::UnivariateMeasure, x) = one(cdf(d, x)) - cdf(d, x)
 logcdf(d::UnivariateMeasure, x) = logt(cdf(d, x))
 logccdf(d::UnivariateMeasure, x) = logt(ccdf(d, x))
 
-#=
-  Construct one-half in `eltype(d)`; `float(::Rational)` would force `Float64`.
-=#
+# Build one-half in the measure's type so rational parameters do not force `Float64`.
 Statistics.median(d::UnivariateMeasure) = quantile(d, one(eltype(d)) / 2)
 
-#=
-  A conforming measure has non-negative variance, so plain `sqrt` is total here.
-=#
 Statistics.std(d::AbstractProbabilityMeasure) = sqrt(var(d))

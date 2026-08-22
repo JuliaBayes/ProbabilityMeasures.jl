@@ -1,15 +1,5 @@
-#=
-  The Reactant half of the conformance suite, in an environment of its own.
-
-  It is separate from `test/` because Reactant brings Enzyme and the XLA runtime with
-  it, and the rest of the suite has no use for either. Keeping it out here also means
-  Reactant's release cadence cannot gate resolution of the main environment. The
-  filename avoids the `test-*.jl` pattern that `test/runtests.jl` walks for, so this
-  never runs by accident from the main suite.
-
-  Run it with `julia --project=test/reactant test/reactant/runtests.jl`, or let
-  `.github/workflows/TestReactant.yml` do it.
-=#
+# Reactant has its own test environment because it brings large compiler dependencies.
+# Run with `julia --project=test/reactant test/reactant/runtests.jl`.
 using Enzyme
 using ProbabilityMeasures
 using ProbabilityMeasuresTest
@@ -18,10 +8,7 @@ using Reactant
 using Test
 
 @testset "Reactant" begin
-    #=
-      Check the extension is loaded. Without it `test_measure` skips its Reactant
-      block and the job passes having tested nothing.
-    =#
+    # Fail rather than silently skipping every Reactant check.
     @test Base.get_extension(ProbabilityMeasures, :ProbabilityMeasuresReactantExt) !==
         nothing
 
@@ -29,14 +16,7 @@ using Test
         test_reactant(d, default_testpoints(d))
     end
 
-    #=
-      Enzyme through Reactant: a compiled log-likelihood differentiated with respect
-      to the parameters. Reactant runs Enzyme on the MLIR and never consults
-      `EnzymeRules`, so this is a different path from the `AutoEnzyme` block in the
-      CPU suite, and it is why there is no `ProbabilityMeasuresReactantEnzymeExt`.
-
-      The check is against the analytic gradient, not another AD backend.
-    =#
+    # Differentiate compiled Reactant code with Enzyme and compare with the formula.
     @testset "Enzyme gradient" begin
         xs = randn(Xoshiro(42), 8)
         μ, σ = 0.5, 1.5

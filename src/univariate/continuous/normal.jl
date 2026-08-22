@@ -3,39 +3,31 @@
     Normal()
 
 The normal (Gaussian) measure on ``\\mathbb{R}`` with mean `μ` and standard
-deviation `σ`, with density
+deviation `σ`. Its density is
 
 ```math
 p(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} \\exp\\!\\left(-\\frac{(x-\\mu)^2}{2\\sigma^2}\\right)
 ```
 
-with respect to Lebesgue measure. `Normal()` gives the standard normal in `Float64`.
+`Normal()` creates the standard normal using `Float64` values.
 
 # Arguments
 
   - `μ::Number`: the mean.
   - `σ::Number`: the standard deviation.
 
-The `Number` bound permits numeric wrappers used by AD and tracing systems.
-
 # Examples
 
-Construction preserves the types of `μ` and `σ`:
-
-```julia
-typeof(Normal(ForwardDiff.Dual(0.0, 1.0), 1.0))
-# Normal{ForwardDiff.Dual{Nothing, Float64, 1}, Float64}
-```
-
-Integer parameters do not force `Float64`; precision follows the argument:
+Parameter types are preserved. Integer parameters do not force `Float64`; result
+precision follows the value being evaluated:
 
 ```julia
 logdensityof(Normal(0, 1), 1.0f0) isa Float32     # true
 logdensityof(Normal(0, 1), big"1.0") isa BigFloat # true
 ```
 
-Construction does not validate. Invalid parameters produce a non-finite density;
-use [`checkparams`](@ref) to validate explicitly.
+The constructor does not check its arguments. Invalid parameters give a non-finite
+density. Use [`checkparams`](@ref) to check them when needed.
 
 ```julia
 checkparams(Normal(0.0, -1.0))               # false
@@ -47,19 +39,11 @@ struct Normal{M<:Number,S<:Number} <: ContinuousUnivariateMeasure
     σ::S
 end
 
-#=
-  Julia's generated outer constructor preserves both parameter types. Validation is
-  handled by `checkparams`.
-=#
-
-# `Float64` here is a default, not a constraint. Write `Normal(0.0f0, 1.0f0)` for Float32.
 Normal() = Normal(0.0, 1.0)
 
 Base.eltype(::Type{Normal{M,S}}) where {M,S} = float(promote_type(M, S))
 
-#=
-  Use `&` because traced comparisons cannot drive short-circuit evaluation.
-=#
+# Wrapped comparisons may not produce a `Bool`, so do not use `&&`.
 checkparams(d::Normal) = isfinite(d.μ) & (d.σ > zero(d.σ))
 
 support(::Normal) = RealLine()
@@ -67,31 +51,25 @@ support(::Normal) = RealLine()
 """
     zval(d::Normal, x)
 
-The standardized value ``(x - \\mu)/\\sigma``.
+Return the standardized value ``(x - \\mu)/\\sigma``.
 """
 @inline zval(d::Normal, x::Number) = (x - d.μ) / d.σ
 
 """
     xval(d::Normal, z)
 
-The inverse of [`zval`](@ref): ``\\mu + \\sigma z``.
+Convert `z` back to the original scale: ``\\mu + \\sigma z``.
 """
 @inline xval(d::Normal, z::Number) = muladd(d.σ, z, d.μ)
 
 @inline function DensityInterface.logdensityof(d::Normal, x::Number)
     z = zval(d, x)
-    #=
-      Convert `σ` to the promoted type of `z` before taking its log. Otherwise an exact
-      scale paired with a `BigFloat` location would cap this term at `Float64`.
-    =#
+    # Match `σ` to `z` so integer parameters do not reduce `BigFloat` precision.
     σ = oftype(z, d.σ)
     return -(z^2 + log2π) / 2 - logt(σ)
 end
 
-#=
-  Draw untracked noise and introduce parameters through arithmetic so pathwise
-  gradients need no custom AD rule.
-=#
+# Apply `μ` and `σ` after drawing noise so automatic differentiation can follow them.
 @inline function Base.rand(rng::AbstractRNG, d::Normal)
     return xval(d, randn(rng, noisetype(d)))
 end
@@ -99,26 +77,21 @@ end
 Statistics.mean(d::Normal) = d.μ
 Statistics.var(d::Normal) = d.σ^2
 
-#=
-  `abs` keeps `std` consistent with `sqrt(var(d))`, even for an invalid negative scale.
-=#
+# Keep this equal to `sqrt(var(d))` even when `σ` is invalid and negative.
 Statistics.std(d::Normal) = abs(d.σ)
 
 Statistics.median(d::Normal) = d.μ
 
 function entropy(d::Normal)
     σ = float(d.σ)
-    # `one(σ)` rather than `1`: `log2π + 1` would evaluate the `Irrational` at Float64.
+    # Keep the constant in the same type as `σ`.
     return (log2π + one(σ)) / 2 + logt(σ)
 end
 
 cdf(d::Normal, x::Number) = erfc(-zval(d, x) * invsqrt2) / 2
 ccdf(d::Normal, x::Number) = erfc(zval(d, x) * invsqrt2) / 2
 
-#=
-  `logerfc` avoids lower-tail underflow; `log1p(-ccdf)` preserves upper-tail precision.
-  Use `select` so traced conditions work. Both arms are total over the real line.
-=#
+# Use a direct formula for each tail to avoid underflow and loss of precision.
 function logcdf(d::Normal, x::Number)
     z = zval(d, x)
     return select(
@@ -137,10 +110,8 @@ function logccdf(d::Normal, x::Number)
     )
 end
 
-#=
-  Negate after multiplication: unary minus would materialize `sqrt2` at `Float64`
-  before it can adopt the argument's type. `erfcinvt` keeps out-of-range inputs total.
-=#
+# Negate after multiplication so `sqrt2` takes the argument's type. `erfcinvt` returns
+# `NaN` instead of throwing for an invalid probability.
 Statistics.quantile(d::Normal, p::Number) = xval(d, -(sqrt2 * erfcinvt(2 * p)))
 
 function Base.show(io::IO, d::Normal)

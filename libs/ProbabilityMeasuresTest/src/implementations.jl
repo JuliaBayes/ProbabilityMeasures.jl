@@ -1,13 +1,4 @@
-#=
-  Per-measure declarations: which optional interface components a measure supports,
-  which objects to test it with, and the measure-specific hooks the generic suite
-  asks for.
-
-  These live here rather than in ProbabilityMeasures itself only so that Interfaces
-  stays out of the main dependency graph. If the compile-time `implements` trait
-  becomes useful to downstream packages, move the `@implements` lines into the main
-  package; Interfaces.jl is small enough that this would be a reasonable trade.
-=#
+# Measures, optional methods, and special cases used by the conformance suite.
 
 const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entropy)
 
@@ -15,10 +6,6 @@ const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entr
     Normal(0.0, 1.0), Normal(-2.5, 0.5), Normal(3.0f0, 2.0f0)
 ]
 
-#=
-  Hooks used by `test_totality` and `test_genericity`. Invalid scales (negative and
-  zero) and a non-finite location are both covered, since they fail differently.
-=#
 _invalids(::Normal) = (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0))
 _exactparams(::Normal) = Normal(0, 1)
 
@@ -26,10 +13,6 @@ _exactparams(::Normal) = Normal(0, 1)
     Exponential(1.0), Exponential(0.4), Exponential(3.0f0)
 ]
 
-#=
-  Hooks used by `test_totality` and `test_genericity`. A negative and a zero scale
-  both fail `checkparams`, and a non-finite scale does too.
-=#
 _invalids(::Exponential) = (Exponential(-1.0), Exponential(0.0), Exponential(Inf))
 _exactparams(::Exponential) = Exponential(1)
 
@@ -37,25 +20,12 @@ _exactparams(::Exponential) = Exponential(1)
     Uniform(0.0, 1.0), Uniform(-1.0, 2.0), Uniform(0.0f0, 2.0f0)
 ]
 
-#=
-  Hooks used by `test_totality` and `test_genericity`. Reversed, empty and unbounded
-  intervals all fail `checkparams` and fail differently.
-
-  The exact instance has to contain the test points of every `Uniform` the suite is
-  run against, and a width other than one so that the precision check has a `log` that
-  is not identically zero.
-=#
 _invalids(::Uniform) = (Uniform(1.0, 0.0), Uniform(0.0, 0.0), Uniform(-Inf, 1.0))
+# Include every test point and use a width whose logarithm is not zero.
 _exactparams(::Uniform) = Uniform(-1, 2)
 
-#=
-  The log-density jumps at the endpoints, so a finite-difference step wider than the
-  distance from the test point to the nearest endpoint sends `test_ad`'s reference to
-  `-Inf`. The default quantiles come within 0.001 of the width, which leaves that to
-  the step-size heuristic; these keep a margin instead. Nothing is lost by pulling them
-  in, since every distribution function here is linear, and `test-uniform.jl` checks
-  the endpoints directly.
-=#
+# Keep finite-difference steps away from the endpoints, where log-density jumps to
+# `-Inf`.
 function default_testpoints(d::Uniform)
     return [float(quantile(d, p)) for p in (0.1, 0.25, 0.5, 0.75, 0.9)]
 end
@@ -64,18 +34,14 @@ end
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
 ]
 
-# Invalid probability vectors used by totality checks.
 function _invalids(::Categorical)
     return (Categorical([-0.5, 1.5]), Categorical([0.0, 0.0]), Categorical(Float64[]))
 end
 _exactparams(::Categorical) = Categorical([1])
 
-# Test each category directly.
 default_testpoints(d::Categorical) = float.(eachindex(d.p))
 
-#=
-  Optional interface components provided by multivariate measures.
-=#
+# Optional methods for multivariate measures.
 const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
 
 @implements MeasureInterface{MULTIVARIATE_OPTIONALS} MvNormal [
@@ -86,9 +52,7 @@ const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
     MvNormal([1.0, -2.0], 1.5 * I),
 ]
 
-#=
-  Invalid parameters with the same dimension as the measure under test.
-=#
+# Keep invalid examples the same size as the measure under test.
 function _invalids(d::MvNormal)
     n, T = length(d.μ), _elscalar(d)
     singular, flipped = _identity(T, n), _identity(T, n)
@@ -103,9 +67,7 @@ end
 
 _identity(::Type{T}, n::Int) where {T} = T[i == j for i in 1:n, j in 1:n]
 
-#=
-  Preserve factor structure so the specialized methods are tested.
-=#
+# Keep the diagonal factor so its specialized methods are tested.
 function _invalids(d::DiagMvNormal)
     n, T = length(d.μ), _elscalar(d)
     singular, flipped = ones(T, n), ones(T, n)
@@ -127,9 +89,7 @@ function _invalids(d::IsoMvNormal)
     )
 end
 
-#=
-  Use a non-unit diagonal so the precision test includes a nonzero logarithm.
-=#
+# Use a non-unit diagonal so the precision test includes a nonzero logarithm.
 function _exactparams(d::MvNormal)
     n = length(d.μ)
     return MvNormal(zeros(Int, n), [i == j ? 2 : Int(i > j) for i in 1:n, j in 1:n])
@@ -142,13 +102,9 @@ end
 
 _exactparams(d::IsoMvNormal) = MvNormal(zeros(Int, length(d.μ)), 2 * I)
 
-#=
-  Test points at fixed radii in whitened coordinates.
-=#
+# Test fixed distances from the mean.
 function default_testpoints(d::MvNormal)
-    #=
-      Match the measure's precision so ReverseDiff sees one tracked scalar type.
-    =#
+    # Keep every coordinate in the measure's numeric type.
     n, T = length(d.μ), _elscalar(d)
     return [unwhiten(d, [isodd(i) ? T(s) : -T(s) for i in 1:n]) for s in (0.75, 0.0, 2.5)]
 end

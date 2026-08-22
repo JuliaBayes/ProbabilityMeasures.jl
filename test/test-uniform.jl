@@ -5,14 +5,8 @@ using ForwardDiff: ForwardDiff
 using Random: Random, Xoshiro
 using Test
 
-#=
-  Run the conformance suite across parameter types and interval placements.
-=#
 @testset "conformance" begin
-    #=
-      Distributions.jl is a test-only numerical reference. It validates its endpoints
-      and promotes them, so widen here rather than comparing against its rounding.
-    =#
+    # Widen endpoints because Distributions.jl promotes them during validation.
     reference_logpdf(m, x) =
         Distributions.logpdf(Distributions.Uniform(Float64(m.a), Float64(m.b)), x)
     for d in (Uniform(0.0, 1.0), Uniform(-1.0, 2.0), Uniform(0.0f0, 2.0f0), Uniform(0, 1))
@@ -26,23 +20,19 @@ end
     @test typeof(Uniform(0, 1)) === Uniform{Int,Int}
     @test typeof(Uniform(0.0f0, 1.0f0)) === Uniform{Float32,Float32}
 
-    # A Float32 endpoint must not silently widen against an integer one.
     @test Uniform(0.0f0, 1).a isa Float32
 end
 
 @testset "precision follows the argument, not the parameters" begin
-    # Integer endpoints must not pin the result to Float64.
     @test logdensityof(Uniform(0, 2), 1.0f0) isa Float32
     @test logdensityof(Uniform(0, 2), big"1.0") isa BigFloat
 
-    #=
-      Check that no Float64 intermediate caps BigFloat precision.
-    =#
+    # Integer endpoints must not reduce `BigFloat` precision.
     exact = logdensityof(Uniform(0, 2), big"1.0")
     full = logdensityof(Uniform(big"0.0", big"2.0"), big"1.0")
     @test abs(exact - full) < 1e-70
 
-    # Rational endpoints stay exact, so both arms have to float their result.
+    # Exact rational inputs must still return floating-point values.
     @test logdensityof(Uniform(0, 2), 1//2) === -log(2.0)
     @test logdensityof(Uniform(0//1, 2//1), 1//2) === -log(2.0)
     @test logdensityof(Uniform(0, 2), 7//2) === -Inf
@@ -50,7 +40,7 @@ end
 end
 
 @testset "construction never validates" begin
-    d = Uniform(1.0, 0.0)          # no throw
+    d = Uniform(1.0, 0.0)
     @test !checkparams(d)
     @test logdensityof(d, 0.5) == -Inf
     @test checkparams(Uniform(0.0, 1.0))
@@ -64,7 +54,7 @@ end
     @test minimum(support(d)) == -1.0
     @test maximum(support(d)) == 2.0
 
-    # Both endpoints belong to the support, as in Distributions.jl.
+    # Both endpoints belong to the support.
     @test insupport(d, -1.0)
     @test insupport(d, 2.0)
     @test !insupport(d, -1.001)
@@ -121,10 +111,7 @@ end
     Random.rand!(Xoshiro(1), v, d)
     @test all(x -> insupport(d, x), v)
 
-    #=
-      For a reparameterized draw x = a + (b - a)u, d/db is the underlying noise u and
-      d/da is its complement.
-    =#
+    # For `x = a + (b - a)u`, the derivatives are `1 - u` and `u`.
     x = rand(Xoshiro(7), d)
     u = (x - d.a) / (d.b - d.a)
     g = ForwardDiff.gradient(p -> rand(Xoshiro(7), Uniform(p[1], p[2])), [d.a, d.b])

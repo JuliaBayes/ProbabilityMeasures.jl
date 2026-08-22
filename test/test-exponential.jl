@@ -5,16 +5,8 @@ using ForwardDiff: ForwardDiff
 using Random: Random, Xoshiro
 using Test
 
-#=
-  Run the conformance suite across parameter types and signs.
-=#
 @testset "conformance" begin
-    #=
-      Distributions.jl is a test-only numerical reference; it shares this scale
-      parameterization. It precomputes `rate = inv(θ)` at the parameter's own
-      precision, so a `Float32` θ needs widening here or the comparison would just be
-      checking Distributions.jl's Float32 rounding rather than our numerics.
-    =#
+    # Widen `θ` because Distributions.jl computes its rate at the parameter's precision.
     reference_logpdf(m, x) =
         Distributions.logpdf(Distributions.Exponential(Float64(m.θ)), x)
     for d in (Exponential(1.0), Exponential(2.5), Exponential(3.0f0), Exponential(2))
@@ -28,23 +20,19 @@ end
     @test typeof(Exponential(1)) === Exponential{Int}
     @test typeof(Exponential(1.0f0)) === Exponential{Float32}
 
-    # A Float32 parameter must not silently widen.
     @test Exponential(1.0f0).θ isa Float32
 end
 
 @testset "precision follows the argument, not the parameters" begin
-    # An integer scale must not pin the result to Float64.
     @test logdensityof(Exponential(2), 1.0f0) isa Float32
     @test logdensityof(Exponential(2), big"1.0") isa BigFloat
 
-    #=
-      Check that no Float64 intermediate caps BigFloat precision.
-    =#
+    # Integer parameters must not reduce `BigFloat` precision.
     exact = logdensityof(Exponential(2), big"1.0")
     full = logdensityof(Exponential(big"2.0"), big"1.0")
     @test abs(exact - full) < 1e-70
 
-    # A rational scale stays exact, so both arms have to float their result.
+    # Exact rational inputs must still return floating-point values.
     @test logdensityof(Exponential(2), 1//2) ≈ -0.25 - log(2.0)
     @test logdensityof(Exponential(2//1), 1//2) isa Float64
     @test logdensityof(Exponential(2), -1//2) === -Inf
@@ -53,7 +41,7 @@ end
 end
 
 @testset "construction never validates" begin
-    d = Exponential(-1.0)          # no throw
+    d = Exponential(-1.0)
     @test !checkparams(d)
     @test isnan(logdensityof(d, 1.0))
     @test checkparams(Exponential(1.0))
@@ -62,7 +50,7 @@ end
 
 @testset "logccdf beats log(ccdf) in the tail" begin
     d = Exponential(1.0)
-    # ccdf underflows to exactly zero here; logccdf must not.
+    # The CCDF underflows here, but its logarithm should remain finite.
     @test ccdf(d, 1000.0) == 0.0
     @test isfinite(logccdf(d, 1000.0))
     @test logccdf(d, 1000.0) ≈ Distributions.logccdf(Distributions.Exponential(), 1000.0)
@@ -101,9 +89,7 @@ end
     Random.rand!(Xoshiro(1), v, d)
     @test all(isfinite, v)
 
-    #=
-      For a reparameterized draw x = θ*e, d/dθ is the underlying noise e = x/θ.
-    =#
+    # For `x = θe`, the derivative is `e = x/θ`.
     x = rand(Xoshiro(7), Exponential(1.5))
     dθ = ForwardDiff.derivative(θ -> rand(Xoshiro(7), Exponential(θ)), 1.5)
     @test dθ ≈ x / 1.5

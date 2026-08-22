@@ -2,23 +2,21 @@
     Exponential(θ)
     Exponential()
 
-The exponential measure on ``[0, \\infty)`` with scale `θ`, with density
+The exponential measure on ``[0, \\infty)`` with scale `θ`. Its density is
 
 ```math
 p(x) = \\frac{1}{\\theta} \\exp(-x/\\theta)
 ```
 
-with respect to Lebesgue measure. `θ` is the mean, matching Distributions.jl's
-parameterization. `Exponential()` gives the unit-scale exponential in `Float64`.
+`θ` is the mean, matching Distributions.jl. `Exponential()` creates the unit-scale
+measure using `Float64`.
 
 # Arguments
 
   - `θ::Number`: the scale.
 
-The `Number` bound permits numeric wrappers used by AD and tracing systems.
-
-Construction does not validate. Invalid parameters produce a non-finite density;
-use [`checkparams`](@ref) to validate explicitly.
+The constructor does not check its arguments. Invalid parameters give a non-finite
+density. Use [`checkparams`](@ref) to check them when needed.
 
 ```julia
 checkparams(Exponential(-1.0))               # false
@@ -29,12 +27,6 @@ struct Exponential{R<:Number} <: ContinuousUnivariateMeasure
     θ::R
 end
 
-#=
-  Julia's generated outer constructor preserves the parameter type. Validation is
-  handled by `checkparams`.
-=#
-
-# `Float64` here is a default, not a constraint. Write `Exponential(1.0f0)` for Float32.
 Exponential() = Exponential(1.0)
 
 Base.eltype(::Type{Exponential{R}}) where {R} = float(R)
@@ -46,21 +38,18 @@ support(::Exponential) = NonNegativeReals()
 """
     sval(d::Exponential, x)
 
-The scaled value ``x/\\theta``.
+Return the scaled value ``x/\\theta``.
 """
 @inline sval(d::Exponential, x::Number) = x / d.θ
 
 @inline function DensityInterface.logdensityof(d::Exponential, x::Number)
     s = sval(d, x)
     θ = oftype(s, d.θ)
-    # Float the outside-the-support arm: an exact `s` would give `-1//0`, not `-Inf`.
+    # Convert exact values to a float before returning `-Inf`.
     return select(x >= zero(x), () -> -(s + logt(θ)), () -> oftype(float(s), -Inf))
 end
 
-#=
-  Draw untracked noise and introduce the scale through multiplication, affine like
-  `Normal`'s `xval`, so pathwise gradients need no custom AD rule.
-=#
+# Apply `θ` after drawing noise so automatic differentiation can follow it.
 @inline function Base.rand(rng::AbstractRNG, d::Exponential)
     e = -log(rand(rng, noisetype(d)))
     return d.θ * e
@@ -69,9 +58,7 @@ end
 Statistics.mean(d::Exponential) = d.θ
 Statistics.var(d::Exponential) = d.θ^2
 
-#=
-  `abs` keeps `std` consistent with `sqrt(var(d))`, even for an invalid negative scale.
-=#
+# Keep this equal to `sqrt(var(d))` even when `θ` is invalid and negative.
 Statistics.std(d::Exponential) = abs(d.θ)
 
 function entropy(d::Exponential)
@@ -91,20 +78,17 @@ end
 
 function logcdf(d::Exponential, x::Number)
     s = sval(d, x)
-    # `float(s)` for the same reason as in `logdensityof`.
+    # Convert exact values to a float before returning `-Inf`.
     return select(x >= zero(x), () -> log1mexpt(-s), () -> oftype(float(s), -Inf))
 end
 
-# Exact for every x, unlike `logcdf`: `-s` never needs a stabilizing rewrite.
+# This direct expression is accurate for every `x`.
 function logccdf(d::Exponential, x::Number)
     s = sval(d, x)
     return select(x >= zero(x), () -> -s, () -> zero(s))
 end
 
-#=
-  `log1pt` keeps this total for `p` outside `[0, 1]`, which can arrive from float
-  noise in a `cdf` round-trip.
-=#
+# `log1pt` returns `NaN` instead of throwing when `p` is outside `[0, 1]`.
 Statistics.quantile(d::Exponential, p::Number) = -d.θ * log1pt(-p)
 
 function Base.show(io::IO, d::Exponential)

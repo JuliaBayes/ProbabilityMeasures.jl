@@ -7,10 +7,7 @@ using QuadGK: quadgk
 using Random: Xoshiro
 using Test
 
-#=
-  Build the reference covariance from the lower triangle of `L`. Entrywise access works
-  for matrices, `Diagonal`, and `UniformScaling`.
-=#
+# Build the reference covariance from the lower triangle of `L`.
 function lowertriangle(m)
     n = length(m.μ)
     return [i >= j ? Float64(m.L[i, j]) : 0.0 for i in 1:n, j in 1:n]
@@ -41,15 +38,9 @@ const CORRELATED = MvNormal([1.0, -2.0], [2.0 0.0; 0.5 1.5])
     end
 end
 
-#=
-  Multivariate versions of the generic normalization, moment, and allocation tests.
-=#
-
 @testset "normalization by two-dimensional quadrature" begin
     for d in (MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]), CORRELATED)
-        #=
-          Ten marginal standard deviations make the omitted tail negligible here.
-        =#
+        # Ten standard deviations leave negligible probability outside the bounds.
         lo, hi = mean(d) .- 10 .* std(d), mean(d) .+ 10 .* std(d)
         inner(x1) = first(quadgk(x2 -> densityof(d, [x1, x2]), lo[2], hi[2]; rtol=1e-11))
         total, err = quadgk(inner, lo[1], hi[1]; rtol=1e-10)
@@ -63,7 +54,7 @@ end
     samples = reduce(hcat, draws)
 
     m = vec(sum(samples; dims=2)) ./ nsamples
-    # Monte Carlo error on each coordinate mean is std/sqrt(n); allow five of them.
+    # Allow five standard errors for each sampled mean.
     @test m ≈ mean(d) atol = 5 * maximum(std(d)) / sqrt(nsamples)
 
     centered = samples .- m
@@ -72,13 +63,10 @@ end
 
 @testset "the density allocates, but only a whitened point" begin
     d, x = CORRELATED, [0.3, -1.0]
-    logdensityof(d, x)                         # compile before measuring
+    logdensityof(d, x)                         # compile first
     bytes = @allocated logdensityof(d, x)
     @test bytes == @allocated logdensityof(d, x)
-    #=
-      Keep the bound above allocator-dependent overhead but below an accidental large
-      allocation.
-    =#
+    # Allow small runtime overhead but catch an unexpectedly large allocation.
     @test bytes <= 1024
 end
 
@@ -103,16 +91,11 @@ end
     end
 end
 
-#=
-  Compare structured factors with equivalent dense factors. The isotropic log determinant
-  may differ by a few ulps because multiplication and repeated addition round differently.
-=#
+# Compare diagonal and isotropic factors with equivalent full matrices. Their log
+# determinants may differ in the last few bits because the operations round differently.
 @testset "structured factors agree with the general path" begin
     lastbit(a, b) = abs(a - b) <= 4 * eps(max(abs(a), abs(b)))
 
-    #=
-      Confirm that the chosen case exercises the rounding difference.
-    =#
     @test 9 * log(1.5) != sum(log(1.5) for _ in 1:9)
 
     densefactor(v, n) = [i == j ? v[i] : 0.0 for i in 1:n, j in 1:n]
@@ -156,9 +139,7 @@ end
         end
     end
 
-    #=
-      Exercise invalid parameters through the structured-factor methods.
-    =#
+    # Check invalid parameters through the specialized methods too.
     μ = [1.0, -2.0]
     for bad in (
         MvNormal(μ, Diagonal([0.0, 1.5])),
@@ -180,16 +161,12 @@ end
     @test cov(diagonal) isa Diagonal
     @test cov(isotropic) isa Diagonal
 
-    #=
-      An isotropic factor takes its dimension from `μ` and is stored as an `isbits` value.
-    =#
+    # An isotropic factor gets its size from `μ` and stores only one number.
     @test support(isotropic) === RealVectors(2)
     @test isbits(isotropic.L)
     @test !isbits(MvNormal([1.0, -2.0], [1.5 0.0; 0.0 1.5]).L)
 
-    #=
-      The factor stores standard deviations; Distributions.jl takes a covariance here.
-    =#
+    # Factors contain standard deviations, while Distributions.jl takes a covariance.
     @test var(isotropic) ≈ fill(1.5^2, 2)
     @test var(diagonal) ≈ [2.0^2, 1.5^2]
     @test cov(isotropic) ≈ Distributions.cov(Distributions.MvNormal([1.0, -2.0], 1.5^2 * I))
@@ -209,9 +186,8 @@ end
     @test typeof(MvNormal([dual, dual], L)) === MvNormal{Vector{typeof(dual)},typeof(L)}
     @test typeof(MvNormal(Float32[0, 0], L)) === MvNormal{Vector{Float32},Matrix{Float64}}
 
-    # A Float32 parameter meeting a Float64 literal must not silently widen.
     @test MvNormal(Float32[0, 0], Float32.(L)).L isa Matrix{Float32}
-    # Any indexable matrix serves as the factor, and it keeps its own type.
+    # Matrix wrappers keep their type.
     @test MvNormal([0.0, 0.0], LowerTriangular(L)).L isa LowerTriangular
 end
 
@@ -220,15 +196,12 @@ end
     @test logdensityof(exact, Float32[1, 2]) isa Float32
     @test logdensityof(exact, big.([1.0, 2.0])) isa BigFloat
 
-    # Check that no Float64 intermediate caps BigFloat precision.
+    # Integer parameters must not reduce `BigFloat` precision.
     x = big.([1.0, 2.0])
     full = logdensityof(MvNormal(big.([0, 0]), big.([2 0; 1 2])), x)
     @test abs(logdensityof(exact, x) - full) < 1e-70
 
-    #=
-      Exact arithmetic reaches the `2π` term as a rational, which must be converted to
-      the corresponding floating-point type.
-    =#
+    # Exact inputs must convert the `2π` term to the matching floating-point type.
     rationals = (
         (
             MvNormal([0//1, 0//1], [1//1 0//1; 1//2 3//2]),
@@ -273,7 +246,7 @@ end
     end
 end
 
-@testset "the density is total in the shape of its argument" begin
+@testset "density handles wrong argument lengths" begin
     d = CORRELATED
     @test isnan(logdensityof(d, [0.5]))
     @test isnan(logdensityof(d, Float64[]))
@@ -312,16 +285,10 @@ end
     @test size(rand(Xoshiro(1), d, 3, 4)) == (3, 4)
     @test eltype(rand(Xoshiro(1), d, 5)) === Vector{Float64}
 
-    #=
-      Sampling uses the reparameterization `μ + Lz`.
-    =#
     z = randn(Xoshiro(7), Float64, 2)
     @test rand(Xoshiro(7), d) == d.μ + d.L * z
 
-    #=
-      Its Jacobian in `μ` is the identity; the derivative of a factor entry is the
-      corresponding noise value.
-    =#
+    # The derivative in `μ` is the identity; a factor entry's derivative is its noise.
     jac = ForwardDiff.jacobian(m -> rand(Xoshiro(7), MvNormal(m, d.L)), d.μ)
     @test jac == [1.0 0.0; 0.0 1.0]
     secondrow = a -> rand(Xoshiro(7), MvNormal(d.μ, [2.0 0.0; a 1.5]))[2]

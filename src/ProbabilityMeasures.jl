@@ -1,9 +1,9 @@
 """
     ProbabilityMeasures
 
-A library of normalized probability measures built for probabilistic programming:
-type-generic, allocation-free, and clean under automatic differentiation and on the
-GPU.
+A library of normalized probability measures for probabilistic programming. It works
+across numeric types, avoids allocations, and supports automatic differentiation and
+GPUs.
 
 See [`AbstractProbabilityMeasure`](@ref) for the interface a measure must satisfy,
 and `ProbabilityMeasuresTest.test_measure` (in `libs/`) for the conformance suite
@@ -32,10 +32,7 @@ include("univariate/discrete/categorical.jl")
 
 include("multivariate/continuous/mvnormal.jl")
 
-#=
-  Keep exports to operations needed by PPLs. More distribution summaries, support
-  types, and transform traits can be added when an implementation needs them.
-=#
+# Export the operations commonly needed by probabilistic programs.
 
 # Core types
 export AbstractProbabilityMeasure
@@ -52,10 +49,7 @@ export support, insupport
 export checkparams, validateparams, noisetype, basefloat
 export cdf, ccdf, logcdf, logccdf, entropy
 
-#=
-  Re-export ecosystem functions so `using ProbabilityMeasures` is sufficient for
-  common measure operations.
-=#
+# Re-export common operations from package dependencies.
 export logdensityof, densityof
 export params
 export mean, var, std, median, quantile, cov

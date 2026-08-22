@@ -10,21 +10,11 @@ using ForwardDiff: ForwardDiff
 using GPUArraysCore: GPUArraysCore
 using Interfaces: Interfaces, @implements, @interface
 using JET: JET
-#= Structured parameters flatten to fewer numbers than their shape suggests. =#
 using LinearAlgebra: Diagonal, I, UniformScaling
 using JLArrays: JLArray
 using Mooncake: Mooncake
 using ProbabilityMeasures
-#=
-  Unexported dispatch aliases. The conditional `check_*` defaults ask what kind of
-  measure `d` is, and `isa ContinuousMeasure` is the idiom the package itself uses.
-=#
 using ProbabilityMeasures: ContinuousMeasure, DiscreteMeasure, UnivariateMeasure
-#=
-  `unwhiten` maps standard normal coordinates back, which is how `MvNormal`'s default test
-  points are built. The two aliases are what the structured factors dispatch on, so that
-  the per-measure hooks reach the same specialized paths the measure itself does.
-=#
 using ProbabilityMeasures: DiagMvNormal, IsoMvNormal, unwhiten
 using QuadGK: quadgk
 using Random: Xoshiro

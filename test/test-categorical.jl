@@ -5,9 +5,8 @@ using ForwardDiff: ForwardDiff
 using Random: Random, Xoshiro
 using Test
 
-# Run conformance checks across parameter types and category counts.
 @testset "conformance" begin
-    # Distributions.jl takes integer categories and promotes its probabilities.
+    # Distributions.jl uses integer categories and promoted probabilities.
     reference_logpdf(m, x) =
         Distributions.logpdf(Distributions.Categorical(Float64.(m.p)), Int(x))
     measures = (
@@ -37,12 +36,12 @@ end
 
     @test Categorical(Float32[0.5, 0.5]).p isa Vector{Float32}
 
-    # Category values use the promoted floating-point type.
+    # Category values use the probabilities' floating-point type.
     @test eltype(Categorical([0.5, 0.5])) === Float64
     @test eltype(Categorical(Float32[0.5, 0.5])) === Float32
     @test eltype(Categorical(1:1)) === Float64
 
-    # The measure is `isbits` when its probability container is.
+    # Inline storage depends on the probability container.
     @test !isbits(Categorical([0.5, 0.5]))
     @test isbits(Categorical(1:1))
 end
@@ -52,7 +51,7 @@ end
     @test logdensityof(Categorical([1]), big"1.0") isa BigFloat
     @test logdensityof(Categorical(Float32[0.25, 0.75]), 1.0) isa Float64
 
-    # Check that no Float64 intermediate caps BigFloat precision.
+    # Probability calculations must keep `BigFloat` precision.
     third = big"1.0" / 3
     exact = logdensityof(Categorical([third, third, 1 - 2 * third]), big"1.0")
     @test exact isa BigFloat
@@ -60,7 +59,7 @@ end
 end
 
 @testset "construction never validates" begin
-    d = Categorical([-0.5, 1.5])          # no throw
+    d = Categorical([-0.5, 1.5])
     @test !checkparams(d)
     @test isnan(logdensityof(d, 1.0))
 
@@ -73,13 +72,13 @@ end
     @test checkparams(Categorical(Float32[0.25, 0.75]))
     @test checkparams(Categorical([1.0]))
 
-    # Normalization is checked explicitly rather than during density evaluation.
+    # Density evaluation cannot detect a sum different from one.
     unnormalized = Categorical([0.5, 0.5, 0.5])
     @test !checkparams(unnormalized)
     @test isfinite(logdensityof(unnormalized, 1.0))
     @test !checkparams(Categorical([0.5, 0.4]))
 
-    # Allow ordinary summation error.
+    # Allow normal floating-point summation error.
     tenth = fill(0.1, 10)
     @test sum(tenth) != 1.0
     @test checkparams(Categorical(tenth))
@@ -150,7 +149,6 @@ end
     @test logcdf(d, 0.0) == -Inf
     @test logccdf(d, 3.0) == -Inf
 
-    # `quantile` inverts `cdf` at each category.
     @test [quantile(d, cdf(d, x)) for x in 1.0:3.0] == [1.0, 2.0, 3.0]
 
     # Out-of-range probabilities still return a category.
@@ -170,8 +168,8 @@ end
     end
 end
 
-@testset "a draw has no pathwise derivative" begin
-    # A categorical draw is piecewise constant in `p`.
+@testset "sample derivative is zero" begin
+    # A sample changes in steps as `p` changes.
     g = ForwardDiff.gradient(q -> rand(Xoshiro(7), Categorical(q)), [0.2, 0.3, 0.5])
     @test all(iszero, g)
 end
@@ -190,7 +188,7 @@ end
 
     @test all(==(1.0), rand(Xoshiro(1), Categorical([1.0]), 16))
 
-    # Inverse-cdf sampling from uniform noise reproduces the category probabilities.
+    # Sample frequencies should match the category probabilities.
     draws = rand(Xoshiro(20250801), d, 200_000)
     freq = [count(==(float(i)), draws) / length(draws) for i in eachindex(p)]
     @test freq ≈ p atol = 0.005

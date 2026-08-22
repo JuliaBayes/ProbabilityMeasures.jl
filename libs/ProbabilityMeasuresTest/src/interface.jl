@@ -1,11 +1,11 @@
 """
     testpoint(d, i = 1)
 
-A deterministic point in the support of `d`, used by the interface predicates.
+A repeatable point in the support of `d`.
 """
 testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
 
-# Predicates receive only the object, so any test point has to be derived from it.
+# Interface checks receive only `d`, so derive their test points from it.
 @interface MeasureInterface AbstractProbabilityMeasure (
     mandatory=(
         logdensityof=(
@@ -66,13 +66,6 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
         ),
     ),
 ) """
-The interface of a normalized probability measure.
-
-Mandatory components are those `AbstractProbabilityMeasure` documents as required
-plus the invariants that make a measure usable inside a PPL: `logdensityof` must be
-total, and the measure must broadcast as a scalar so that batched evaluation fuses
-into a single kernel.
-
-Optional components cover distribution functions and univariate or multivariate
-summaries. A measure declares the components it implements.
+Checks the required measure methods and any declared distribution functions or
+summaries.
 """

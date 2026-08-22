@@ -1,19 +1,12 @@
 """
     Support
 
-Supertype for descriptions of the set a measure puts its mass on.
-
-Supports are *singletons wherever possible*. A singleton carries no numeric payload,
-so it cannot pin numeric precision and costs nothing to pass into a kernel.
+Describes the values a measure can produce.
 """
 abstract type Support end
 
 "The whole real line, ``(-\\infty, \\infty)``."
 struct RealLine <: Support end
-
-#=
-  Add more support types when a measure needs them.
-=#
 
 """
     support(d) -> Support
@@ -28,9 +21,8 @@ function support end
 
 Whether `x` lies in the support.
 
-This is a *predicate*, not a precondition. `logdensityof` is total and returns `-Inf`
-outside the support on its own. This is intended for samplers, transforms, and
-validation.
+`logdensityof` handles values outside the support on its own. Use `insupport` when a
+sampler, transform, or validation step needs a boolean check.
 """
 insupport(d::AbstractProbabilityMeasure, x) = insupport(support(d), x)
 
@@ -51,7 +43,6 @@ Base.maximum(::NonNegativeReals) = Inf
     RealInterval(a, b)
 
 The closed interval ``[a, b]``.
-
 """
 struct RealInterval{A<:Number,B<:Number} <: Support
     a::A
@@ -84,7 +75,6 @@ Base.maximum(s::IntegerRange) = s.b
     RealVectors(n)
 
 The real vectors of length `n`, ``\\mathbb{R}^n``.
-
 """
 struct RealVectors <: Support
     n::Int
