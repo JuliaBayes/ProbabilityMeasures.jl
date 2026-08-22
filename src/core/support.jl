@@ -72,6 +72,28 @@ Base.minimum(s::IntegerRange) = s.a
 Base.maximum(s::IntegerRange) = s.b
 
 """
+    IntegerSimplex(n, k)
+
+The non-negative integer vectors of length `k` whose entries sum to `n`.
+"""
+struct IntegerSimplex{N<:Integer,K<:Integer} <: Support
+    n::N
+    k::K
+end
+
+function insupport(s::IntegerSimplex, x::AbstractVector{<:Number})
+    length(x) == s.k || return false
+    remaining = s.n
+    ok = true
+    for xᵢ in x
+        valid = isfinite(xᵢ) & isinteger(xᵢ) & (xᵢ >= zero(xᵢ)) & (xᵢ <= remaining)
+        ok &= valid
+        remaining -= select(valid, () -> xᵢ, () -> zero(xᵢ))
+    end
+    return ok & iszero(remaining)
+end
+
+"""
     RealVectors(n)
 
 The real vectors of length `n`, ``\\mathbb{R}^n``.

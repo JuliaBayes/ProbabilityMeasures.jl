@@ -88,6 +88,48 @@ function default_testpoints(d::Binomial)
     return [float(k) for k in 0:(d.n) if invertible(k)]
 end
 
+@implements MeasureInterface{(:meanvector, :cov)} Multinomial [
+    Multinomial(5, [0.2, 0.3, 0.5]),
+    Multinomial(4, Float32[0.25, 0.25, 0.5]),
+    Multinomial(3, [1.0]),
+]
+
+_structural(::Multinomial) = (:n,)
+
+function _invalids(d::Multinomial)
+    negative = map(pᵢ -> -one(float(pᵢ)), d.p)
+    nonfinite = map(pᵢ -> oftype(float(pᵢ), NaN), d.p)
+    return (
+        Multinomial(-one(d.n), d.p), Multinomial(d.n, negative), Multinomial(d.n, nonfinite)
+    )
+end
+
+function _exactparams(d::Multinomial)
+    p = zeros(Int, length(d.p))
+    p[1] = 1
+    return Multinomial(d.n, p)
+end
+
+function default_testpoints(d::Multinomial)
+    T = _elscalar(d)
+    return [
+        [i == j ? convert(T, d.n) : zero(T) for i in eachindex(d.p)] for j in eachindex(d.p)
+    ]
+end
+
+function _extremepoints(d::Multinomial)
+    k = length(d.p)
+    return (
+        fill(Inf, k),
+        fill(-Inf, k),
+        fill(NaN, k),
+        fill(floatmax(Float64), k),
+        zeros(k),
+        zeros(k + 1),
+        Float64[],
+    )
+end
+
 # Optional methods for multivariate measures.
 const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
 
