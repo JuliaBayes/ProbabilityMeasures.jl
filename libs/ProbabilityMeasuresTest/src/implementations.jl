@@ -16,6 +16,15 @@ _exactparams(::Normal) = Normal(0, 1)
 _invalids(::Exponential) = (Exponential(-1.0), Exponential(0.0), Exponential(Inf))
 _exactparams(::Exponential) = Exponential(1)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Weibull [
+    Weibull(1.0, 1.0), Weibull(0.75, 2.5), Weibull(2.0f0, 0.5f0)
+]
+
+function _invalids(::Weibull)
+    return (Weibull(-1.0, 1.0), Weibull(0.0, 1.0), Weibull(1.0, 0.0), Weibull(Inf, 1.0))
+end
+_exactparams(::Weibull) = Weibull(2, 3)
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Uniform [
     Uniform(0.0, 1.0), Uniform(-1.0, 2.0), Uniform(0.0f0, 2.0f0)
 ]
