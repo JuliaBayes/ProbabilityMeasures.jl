@@ -12,7 +12,7 @@ that checks it.
 module ProbabilityMeasures
 
 using DensityInterface: DensityInterface, densityof, logdensityof
-using IrrationalConstants: invsqrt2, log2π, logtwo, sqrt2
+using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfc, erfcinv, logerfc, loggamma
@@ -28,6 +28,7 @@ include("univariate/continuous/normal.jl")
 include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
+include("univariate/continuous/cauchy.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
@@ -62,6 +63,7 @@ export Normal
 export Exponential
 export Uniform
 export Laplace
+export Cauchy
 export Categorical
 export Bernoulli
 export Binomial
