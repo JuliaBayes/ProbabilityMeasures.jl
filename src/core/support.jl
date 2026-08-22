@@ -39,6 +39,14 @@ insupport(::NonNegativeReals, x::Number) = isfinite(x) & (x >= zero(x))
 Base.minimum(::NonNegativeReals) = 0.0
 Base.maximum(::NonNegativeReals) = Inf
 
+"The positive real line, ``(0, \\infty)``."
+struct PositiveReals <: Support end
+
+insupport(::PositiveReals, x::Number) = isfinite(x) & (x > zero(x))
+
+Base.minimum(::PositiveReals) = 0.0
+Base.maximum(::PositiveReals) = Inf
+
 """
     RealInterval(a, b)
 

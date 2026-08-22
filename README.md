@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements the univariate normal,
-exponential, uniform, Laplace, and categorical measures, and the multivariate
-normal.
+log-normal, exponential, uniform, Laplace, and categorical measures, and the
+multivariate normal.
 
 ## Installation
 
@@ -61,8 +61,8 @@ than throwing.
 
 ## Available API
 
-`Normal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`, `Laplace(μ, b)`, and `Categorical(p)`
-each support:
+`Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`,
+`Laplace(μ, b)`, and `Categorical(p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -195,7 +195,7 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 
 ## Current scope
 
-ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, `Uniform`,
+ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`, `Uniform`,
 `Laplace`, `Categorical`, and `MvNormal`. Transformed or composite measures and
 Distributions.jl interoperability are not implemented yet.
 

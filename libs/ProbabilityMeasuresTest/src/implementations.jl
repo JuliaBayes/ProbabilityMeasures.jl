@@ -9,6 +9,13 @@ const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entr
 _invalids(::Normal) = (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0))
 _exactparams(::Normal) = Normal(0, 1)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} LogNormal [
+    LogNormal(0.0, 1.0), LogNormal(-1.0, 0.5), LogNormal(2.0f0, 0.75f0)
+]
+
+_invalids(::LogNormal) = (LogNormal(0.0, -1.0), LogNormal(0.0, 0.0), LogNormal(Inf, 1.0))
+_exactparams(::LogNormal) = LogNormal(0, 1)
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Exponential [
     Exponential(1.0), Exponential(0.4), Exponential(3.0f0)
 ]

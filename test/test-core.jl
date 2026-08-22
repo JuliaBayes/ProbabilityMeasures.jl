@@ -33,6 +33,15 @@ end
     @test isbits(RealLine())
     @test sizeof(RealLine()) == 0
 
+    p = PositiveReals()
+    @test minimum(p) == 0.0
+    @test maximum(p) == Inf
+    @test insupport(p, 1.0)
+    @test !insupport(p, 0.0)
+    @test !insupport(p, -1.0)
+    @test !insupport(p, Inf)
+    @test !insupport(p, NaN)
+
     s = RealInterval(-1.0f0, 2)
     @test s isa RealInterval{Float32,Int}
     @test minimum(s) === -1.0f0

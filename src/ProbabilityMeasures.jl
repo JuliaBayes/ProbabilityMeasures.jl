@@ -25,6 +25,7 @@ include("core/support.jl")
 include("core/interface.jl")
 
 include("univariate/continuous/normal.jl")
+include("univariate/continuous/lognormal.jl")
 include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
@@ -45,7 +46,8 @@ export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
 export ContinuousMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange, RealVectors
+export Support,
+    RealLine, NonNegativeReals, PositiveReals, RealInterval, IntegerRange, RealVectors
 export support, insupport
 
 # Interface
@@ -59,6 +61,7 @@ export mean, var, std, median, quantile, cov
 
 # Measures
 export Normal
+export LogNormal
 export Exponential
 export Uniform
 export Laplace
