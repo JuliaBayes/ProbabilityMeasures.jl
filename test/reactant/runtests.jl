@@ -12,7 +12,7 @@ using Test
     @test Base.get_extension(ProbabilityMeasures, :ProbabilityMeasuresReactantExt) !==
         nothing
 
-    for d in (Normal(0.0, 1.0), Normal(-2.5, 0.5), Uniform(-1.0, 2.0))
+    for d in (Normal(0.0, 1.0), Normal(-2.5, 0.5), Uniform(-1.0, 2.0), Cauchy(-1.0, 2.0))
         test_reactant(d, default_testpoints(d))
     end
 
@@ -29,5 +29,10 @@ using Test
         )
 
         @test [Float64(got[1]), Float64(got[2])] ≈ analytic rtol = 1e-10
+
+        loss = (m, s) -> logdensityof(Cauchy(m, s), 2.0)
+        grad = (m, s) -> Enzyme.gradient(Enzyme.Reverse, loss, m, s)
+        got = @jit grad(Reactant.ConcreteRNumber(0.0), Reactant.ConcreteRNumber(1.0))
+        @test [Float64(got[1]), Float64(got[2])] ≈ [0.8, 0.6] rtol = 1e-10
     end
 end
