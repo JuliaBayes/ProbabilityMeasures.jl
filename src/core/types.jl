@@ -72,6 +72,7 @@ const DiscreteMeasure{F} = AbstractProbabilityMeasure{F,Discrete}
 const ContinuousUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Continuous}
 const DiscreteUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Discrete}
 const ContinuousMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Continuous}
+const DiscreteMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Discrete}
 
 # Reuse the same measure for every value in a broadcast.
 Base.broadcastable(d::AbstractProbabilityMeasure) = Ref(d)

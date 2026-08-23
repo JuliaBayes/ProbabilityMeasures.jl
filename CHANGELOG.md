@@ -41,6 +41,15 @@ and this project adheres to [Semantic Versioning].
   lengths. Its entropy, CDFs and quantile have no closed form and sum over the support
   in fixed-length loops, which keeps them traceable and GPU-safe, and each CDF tail is
   summed directly so a small tail is not lost to subtraction from one.
+- `Multinomial(n, p)`, the category counts of `n` categorical draws and the first
+  discrete multivariate measure, with the `DiscreteMultivariateMeasure` alias and the
+  `CountVectors` support it dispatches on. Counts carry the floating-point type of `p`,
+  and `n` stays an `Integer` for `Binomial`'s reason: it sets the support and the
+  sampling loop length. A draw counts `n` categorical samples rather than chaining
+  conditional binomials, whose trial counts depend on the draws already taken and so
+  can be neither traced nor run in a device kernel. There is no `cdf`, `quantile` or
+  `entropy`: none has a closed form, and the support is every count vector summing to
+  `n`.
 - `Laplace(μ, b)`, whose density has a kink at `x = μ`. `logcdf` and `logccdf`
   compute the near tail directly, so they stay finite where `cdf` and `ccdf` underflow,
   and the reparameterized draw is the difference of two exponential samples.

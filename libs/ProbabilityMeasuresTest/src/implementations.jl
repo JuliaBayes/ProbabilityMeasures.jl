@@ -168,3 +168,56 @@ function _extremepoints(d::MvNormal)
         Float64[],
     )
 end
+
+# Entropy is left out: it has no closed form and the support is every count vector.
+@implements MeasureInterface{(:meanvector, :cov)} Multinomial [
+    Multinomial(4, [0.2, 0.3, 0.5]),
+    Multinomial(1, [0.7, 0.3]),
+    Multinomial(6, Float32[0.25, 0.75]),
+    Multinomial(3, [1.0]),
+]
+
+# The number of draws sets the support and the sampling loop length.
+_structural(::Multinomial) = (:n,)
+
+# Keep the number of categories, so the test points remain the right length. A
+# negative probability stays finite where its count is zero, so put it first, where
+# the test points have a positive count.
+function _invalids(d::Multinomial)
+    k, T = length(d.p), _elscalar(d)
+    return (
+        Multinomial(-one(d.n), d.p),
+        Multinomial(d.n, fill(T(NaN), k)),
+        Multinomial(d.n, [-one(T); fill(one(T), k - 1)]),
+    )
+end
+
+# Use dyadic probabilities: they convert to rationals without large denominators.
+function _exactparams(d::Multinomial)
+    k = length(d.p)
+    return Multinomial(d.n, [i == 1 ? 1 - (k - 1)//2^(k - 1) : 1//2^(k - 1) for i in 1:k])
+end
+
+# Spread the draws over the categories, then concentrate them on one. The first point
+# keeps a positive count in the first category, which `_invalids` relies on.
+function default_testpoints(d::Multinomial)
+    k, n = length(d.p), Int(d.n)
+    spread = [float(fld(n, k) + (i <= mod(n, k))) for i in 1:k]
+    first_only = [float(i == 1 ? n : 0) for i in 1:k]
+    last_only = [float(i == k ? n : 0) for i in 1:k]
+    return [spread, first_only, last_only]
+end
+
+function _extremepoints(d::Multinomial)
+    k = length(d.p)
+    return (
+        fill(Inf, k),
+        fill(-Inf, k),
+        fill(NaN, k),
+        fill(floatmax(Float64), k),
+        fill(-1.0, k),
+        zeros(k),
+        zeros(k + 1),
+        Float64[],
+    )
+end

@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements the univariate normal,
-exponential, uniform, Laplace, and categorical measures, and the multivariate
-normal.
+exponential, uniform, Laplace, categorical, Bernoulli, and binomial measures, and the
+multivariate normal and multinomial.
 
 ## Installation
 
@@ -61,8 +61,8 @@ than throwing.
 
 ## Available API
 
-`Normal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`, `Laplace(μ, b)`, and `Categorical(p)`
-each support:
+`Normal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`, `Laplace(μ, b)`, `Categorical(p)`,
+`Bernoulli(p)`, and `Binomial(n, p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -115,6 +115,23 @@ MvNormal(μ, σ * I)            # isotropic, σ the common standard deviation
 The second argument is always a factor. In the diagonal and isotropic forms, `σ`
 contains standard deviations, not variances.
 
+`Multinomial(n, p)` counts the categories drawn in `n` independent categorical draws,
+so its support is the count vectors of length `length(p)` that sum to `n`:
+
+```julia
+using ProbabilityMeasures
+
+d = Multinomial(4, [0.2, 0.3, 0.5])
+
+logdensityof(d, [2.0, 1.0, 1.0])
+mean(d), cov(d), var(d), std(d)
+rand(d)
+```
+
+Counts are drawn in the floating-point type of `p`, as for `Categorical`. It has no
+`cdf`, `quantile` or `entropy`: none has a closed form, and the support is every count
+vector summing to `n`.
+
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
 
@@ -154,8 +171,9 @@ respect to the parameters without custom derivative rules. Categorical draws do 
 have a pathwise derivative, but their log-density is differentiable with respect to
 the probabilities.
 
-`Categorical` accepts any `AbstractVector`. Use an `isbits` vector type, such as
-`StaticArrays.SVector`, when the complete measure must be `isbits`.
+`Categorical` and `Multinomial` accept any `AbstractVector` of probabilities. Use an
+`isbits` vector type, such as `StaticArrays.SVector`, when the complete measure must be
+`isbits`.
 
 ## Defining a measure
 
@@ -196,7 +214,7 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `Exponential`, `Uniform`,
-`Laplace`, `Categorical`, and `MvNormal`. Transformed or composite measures and
+`Laplace`, `Categorical`, `Bernoulli`, `Binomial`, `MvNormal`, and `Multinomial`. Transformed or composite measures and
 Distributions.jl interoperability are not implemented yet.
 
 ## Citation

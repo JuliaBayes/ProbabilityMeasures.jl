@@ -68,10 +68,14 @@ end
 The floating-point type for the probability of `x` under a discrete `d`.
 
 It promotes the parameter types with the type of `x`, so a `BigFloat` argument keeps
-its precision.
+its precision. A multivariate `x` contributes its element type.
 """
 @inline function masstype(::D, x::Number) where {D<:DiscreteMeasure}
     return float(promote_type(_promoted_paramtype(D), typeof(x)))
+end
+
+@inline function masstype(::D, x::AbstractVector{<:Number}) where {D<:DiscreteMeasure}
+    return float(promote_type(_promoted_paramtype(D), eltype(x)))
 end
 
 function Random.rand(

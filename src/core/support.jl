@@ -83,3 +83,26 @@ end
 function insupport(s::RealVectors, x::AbstractVector{<:Number})
     return (length(x) == s.n) & all(isfinite, x)
 end
+
+"""
+    CountVectors(n, k)
+
+The vectors of `k` non-negative integers that sum to `n`.
+
+`n < 0` describes the empty set.
+"""
+struct CountVectors{N<:Integer} <: Support
+    n::N
+    k::Int
+end
+
+function insupport(s::CountVectors, x::AbstractVector{<:Number})
+    length(x) == s.k || return false
+    ok = true
+    total = zero(eltype(x))
+    for xᵢ in x
+        ok &= isinteger(xᵢ) & (xᵢ >= zero(xᵢ))
+        total += xᵢ
+    end
+    return ok & (total == s.n)
+end
