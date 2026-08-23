@@ -88,6 +88,16 @@ function default_testpoints(d::Binomial)
     return [float(k) for k in 0:(d.n) if invertible(k)]
 end
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Poisson [
+    Poisson(0.5), Poisson(4.0), Poisson(2.5f0)
+]
+
+# A negative rate stays finite at zero, the first test point, and is tested separately.
+_invalids(::Poisson) = (Poisson(-Inf), Poisson(Inf), Poisson(NaN))
+
+# Use a rate whose logarithm is not zero.
+_exactparams(::Poisson) = Poisson(2)
+
 # Optional methods for multivariate measures.
 const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)
 

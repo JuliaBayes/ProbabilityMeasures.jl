@@ -71,6 +71,14 @@ insupport(s::IntegerRange, x::Number) = isinteger(x) & (x >= s.a) & (x <= s.b)
 Base.minimum(s::IntegerRange) = s.a
 Base.maximum(s::IntegerRange) = s.b
 
+"The non-negative integers, ``\\{0, 1, 2, \\ldots\\}``."
+struct NonNegativeIntegers <: Support end
+
+insupport(::NonNegativeIntegers, x::Number) = isinteger(x) & (x >= zero(x))
+
+Base.minimum(::NonNegativeIntegers) = 0
+Base.maximum(::NonNegativeIntegers) = Inf
+
 """
     RealVectors(n)
 
