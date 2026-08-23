@@ -1,7 +1,7 @@
 """
     Poisson(λ)
 
-The Poisson measure on ``\\{0, 1, 2, \\ldots\\}`` with rate `λ`, with probability mass
+The Poisson measure on ``\\{0, 1, 2, \\ldots\\}`` with rate `λ` and probability mass
 function
 
 ```math
@@ -10,7 +10,7 @@ P(X = k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}.
 
 # Arguments
 
-  - `λ::Number`: the rate, which is both the mean and the variance.
+  - `λ::Number`: the rate, equal to both mean and variance
 
 The result type follows `λ` and the value being evaluated. Samples use
 `float(typeof(λ))`.
