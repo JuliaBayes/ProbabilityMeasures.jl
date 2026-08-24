@@ -120,7 +120,8 @@ contains standard deviations, not variances.
 
 `Multinomial(n, p)` supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`,
 `std`, `params`, `support`, `insupport`, and `checkparams`. Its samples are count vectors
-in `IntegerSimplex(n, length(p))`.
+in `IntegerSimplex(n, length(p))`, and `var` and `std` return marginal values. As with
+`MvNormal`, multivariate `cdf`, `quantile`, and `median` are not provided.
 
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:

@@ -5,9 +5,13 @@ using LinearAlgebra: diag
 using Random: Xoshiro
 using Test
 
+reference(d) = Distributions.Multinomial(d.n, Float64.(d.p))
+
+# Every count vector of length `k` summing to `n`, corners and interior alike.
+counts(n, k) = k == 1 ? [[n]] : [[i; c] for i in 0:n for c in counts(n - i, k - 1)]
+
 @testset "conformance" begin
-    reference_logpdf(m, x) =
-        Distributions.logpdf(Distributions.Multinomial(m.n, Float64.(m.p)), Int.(x))
+    reference_logpdf(m, x) = Distributions.logpdf(reference(m), Int.(x))
     for d in (
         Multinomial(5, [0.2, 0.3, 0.5]),
         Multinomial(4, Float32[0.25, 0.25, 0.5]),
@@ -58,13 +62,15 @@ end
     @test !insupport(s, [1.5, 1.5, 2.0])
     @test !insupport(s, [NaN, 0.0, 5.0])
     @test !insupport(s, [Inf, 0.0, 5.0])
+    @test !insupport(s, Float32[1.0, 4.0])
+    @test insupport(s, Float32[1.0, 2.0, 2.0])
     @test !insupport(IntegerSimplex(0, 2), [typemax(UInt), one(UInt)])
     @test isbits(s)
 end
 
 @testset "density" begin
     d = Multinomial(5, [0.2, 0.3, 0.5])
-    r = Distributions.Multinomial(5, d.p)
+    r = reference(d)
     @test logdensityof(d, [1.0, 2.0, 2.0]) ≈ Distributions.logpdf(r, [1, 2, 2])
 
     @test logdensityof(d, [1.0, 4.0]) == -Inf
@@ -90,7 +96,7 @@ end
 
 @testset "moments and normalization" begin
     d = Multinomial(5, [0.2, 0.3, 0.5])
-    r = Distributions.Multinomial(5, d.p)
+    r = reference(d)
     @test mean(d) ≈ Distributions.mean(r)
     @test cov(d) ≈ Distributions.cov(r)
     @test var(d) ≈ diag(Distributions.cov(r))
@@ -103,6 +109,42 @@ end
     @test total ≈ 1
 end
 
+@testset "reference numerics against Distributions.jl" begin
+    for d in (Multinomial(5, [0.2, 0.3, 0.5]), Multinomial(4, Float32[0.25, 0.25, 0.5]))
+        T, r = eltype(eltype(d)), reference(d)
+        for x in counts(d.n, length(d.p))
+            value = logdensityof(d, convert.(T, x))
+            @test value isa T
+            @test value ≈ Distributions.logpdf(r, x) rtol = sqrt(eps(T))
+        end
+    end
+
+    # A wider point promotes the result, it does not narrow to the type of `p`.
+    @test logdensityof(Multinomial(4, Float32[0.25, 0.25, 0.5]), [2.0, 1.0, 1.0]) isa
+        Float64
+end
+
+#=
+  The conformance suite skips allocation checks for multivariate measures, so nothing
+  else locks this in. `result = logp` in the density is what keeps the closure from
+  boxing the accumulator; deleting it fails here.
+=#
+@testset "the density does not allocate" begin
+    d, x = Multinomial(5, [0.2, 0.3, 0.5]), [1.0, 2.0, 2.0]
+    logdensityof(d, x)                         # compile first
+    insupport(d, x)
+    @test (@allocated logdensityof(d, x)) == 0
+    @test (@allocated insupport(d, x)) == 0
+end
+
+@testset "sampling never fills a zero-probability category" begin
+    d = Multinomial(6, [0.5, 0.0, 0.5])
+    draws = [rand(Xoshiro(seed), d) for seed in 1:500]
+    @test all(x -> iszero(x[2]), draws)
+    @test all(x -> insupport(d, x), draws)
+    @test all(x -> logdensityof(d, x) > -Inf, draws)
+end
+
 @testset "sampling" begin
     d, nsamples = Multinomial(5, [0.2, 0.3, 0.5]), 200_000
     @test rand(Xoshiro(0x4144414d), d) isa Vector{Float64}
@@ -111,4 +153,8 @@ end
     @test all(x -> insupport(d, x), draws)
     sampled_mean = reduce(+, draws) ./ nsamples
     @test sampled_mean ≈ mean(d) atol = 5 * maximum(std(d)) / sqrt(nsamples)
+
+    centered = [x .- sampled_mean for x in draws]
+    sampled_cov = reduce(+, x * x' for x in centered) ./ (nsamples - 1)
+    @test sampled_cov ≈ cov(d) rtol = 20 / sqrt(nsamples)
 end

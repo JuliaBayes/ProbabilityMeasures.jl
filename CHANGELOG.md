@@ -41,14 +41,14 @@ and this project adheres to [Semantic Versioning].
   lengths. Its entropy, CDFs and quantile have no closed form and sum over the support
   in fixed-length loops, which keeps them traceable and GPU-safe, and each CDF tail is
   summed directly so a small tail is not lost to subtraction from one.
-- `Multinomial(n, p)`, with the `DiscreteMultivariateMeasure` alias and count-vector
-  support. Its density promotes the types of `p` and the count vector, while its
-  moments, covariance and fixed-loop sampling preserve the numeric type of `p`.
 - `Laplace(μ, b)`, whose density has a kink at `x = μ`. `logcdf` and `logccdf`
   compute the near tail directly, so they stay finite where `cdf` and `ccdf` underflow,
   and the reparameterized draw is the difference of two exponential samples.
 - `Cauchy(μ, σ)`, with direct stable formulas for both tails and a reparameterized
   inverse-CDF draw. Its undefined mean, variance, and standard deviation return `NaN`.
+- `Multinomial(n, p)`, with the `DiscreteMultivariateMeasure` alias and count-vector
+  support. Its density promotes the types of `p` and the count vector, while its
+  moments, covariance and fixed-loop sampling preserve the numeric type of `p`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
