@@ -7,7 +7,7 @@ using Test
 
 reference(d) = Distributions.Multinomial(d.n, Float64.(d.p))
 
-# Every count vector of length `k` summing to `n`, corners and interior alike.
+# Count vectors of length `k` that sum to `n`.
 counts(n, k) = k == 1 ? [[n]] : [[i; c] for i in 0:n for c in counts(n - i, k - 1)]
 
 @testset "conformance" begin
@@ -119,19 +119,15 @@ end
         end
     end
 
-    # A wider point promotes the result, it does not narrow to the type of `p`.
+    # The evaluation point can widen the result type.
     @test logdensityof(Multinomial(4, Float32[0.25, 0.25, 0.5]), [2.0, 1.0, 1.0]) isa
         Float64
 end
 
-#=
-  The conformance suite skips allocation checks for multivariate measures, so nothing
-  else locks this in. `result = logp` in the density is what keeps the closure from
-  boxing the accumulator; deleting it fails here.
-=#
+# The conformance suite skips allocation checks for multivariate measures.
 @testset "the density does not allocate" begin
     d, x = Multinomial(5, [0.2, 0.3, 0.5]), [1.0, 2.0, 2.0]
-    logdensityof(d, x)                         # compile first
+    logdensityof(d, x) # compile first
     insupport(d, x)
     @test (@allocated logdensityof(d, x)) == 0
     @test (@allocated insupport(d, x)) == 0

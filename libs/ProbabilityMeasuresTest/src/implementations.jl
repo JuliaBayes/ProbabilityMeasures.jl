@@ -120,22 +120,14 @@ function _invalids(d::Multinomial)
     )
 end
 
-#=
-  Dyadic weights, so every corner and interior point has a finite exact log-density.
-  All mass on one category would make the precision check compare `0.0` with `0.0`,
-  and would send `test_exactness` through `abs(-Inf - -Inf)` at every other point.
-=#
+# Dyadic weights keep exact log-densities finite at corners and interior points.
 function _exactparams(d::Multinomial)
     k = length(d.p)
     p = [i == 1 ? 1//2^(k - 1) : 1//2^(k - i + 1) for i in 1:k]
     return Multinomial(d.n, p)
 end
 
-#=
-  The spread point comes first: `test_genericity`, `test_ad`, `test_inference` and
-  `test_allocations` use only `first(xs)`, and at a corner the multinomial coefficient
-  is exactly one and all but one `xᵢ log pᵢ` term drops out.
-=#
+# Several conformance tests use only the first point, so make it an interior point.
 function default_testpoints(d::Multinomial)
     T, k = _elscalar(d), length(d.p)
     spread = [convert(T, fld(d.n + k - i, k)) for i in 1:k]
