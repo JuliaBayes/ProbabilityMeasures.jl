@@ -49,17 +49,10 @@ and this project adheres to [Semantic Versioning].
 - `Multinomial(n, p)`, with the `DiscreteMultivariateMeasure` alias and count-vector
   support. Its density promotes the types of `p` and the count vector, while its
   moments, covariance and fixed-loop sampling preserve the numeric type of `p`.
-- `Poisson(λ)`, the first measure whose support has no upper end, and the
-  `NonNegativeIntegers` support it needs. Its log-density is constant time, but entropy,
-  the CDFs, quantiles and sampling have no closed form and sum over the support, so they
-  stop twenty standard deviations above the mean, where what is left out is below the
-  rounding error of a `BigFloat` sum. Reading that bound off `λ` is a branch on a value,
-  which is why these five are the one part of a measure that cannot be traced or called
-  from a device kernel; the closed-form alternatives, the regularized incomplete gamma
-  and a rejection sampler, branch on a value too. Draws invert the CDF rather than
-  multiplying uniforms, so a large rate does not lose every sample once `exp(-λ)` rounds
-  to zero. The cost of the five is linear in `λ`, and a rate whose bound passes
-  `typemax(Int)` puts them all at `NaN`.
+- `Poisson(λ)` and its `NonNegativeIntegers` support. Density is constant time.
+  Entropy, CDFs, quantiles, and sampling use a truncated sum, cost `O(λ)`, and cannot
+  run in traced or device-side code. Sampling uses CDF inversion to avoid underflow at
+  large rates. These operations return `NaN` if the truncation bound exceeds `Int`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
@@ -76,9 +69,8 @@ and this project adheres to [Semantic Versioning].
 - The conformance suite now supports array parameters and discrete measures. It
   flattens parameters for AD checks, sums discrete probability masses for normalization,
   and skips pathwise sampling derivatives for discrete draws.
-- Discrete normalization in the conformance suite now runs only when the support has a
-  finite last outcome, since it enumerates it. `Poisson` carries its own normalization
-  test instead.
+- Discrete normalization tests now skip supports without a finite maximum. `Poisson`
+  provides its own normalization test.
 - The conformance suite recognizes structural parameters, those that set a measure's
   support or its loop lengths, such as `Binomial`'s `n`. They are held fixed rather
   than swept through the AD and element-type checks, which would otherwise ask for a

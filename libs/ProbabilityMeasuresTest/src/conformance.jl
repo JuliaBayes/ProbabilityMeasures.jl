@@ -183,7 +183,7 @@ function _can_integrate(d)
     return _bounded(support(d))
 end
 
-# Discrete normalization enumerates the support, so it needs a finite last outcome.
+# Discrete normalization enumerates the support and therefore requires finite bounds.
 function _can_enumerate(d)
     d isa DiscreteMeasure || return false
     d isa UnivariateMeasure || return false

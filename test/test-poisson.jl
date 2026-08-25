@@ -38,13 +38,13 @@ end
     @test logdensityof(Poisson(2), 1.0f0) isa Float32
     @test logdensityof(Poisson(2), big"1.0") isa BigFloat
 
-    # An integer rate must not drop the argument back to `Float64`.
+    # An integer rate must preserve a `BigFloat` argument.
     exact = logdensityof(Poisson(2), big"1.0")
     @test abs(exact - (log(big"2.0") - 2)) < 1e-70
 end
 
 @testset "construction never validates" begin
-    # A negative rate leaves `k = 0` finite, where the offending factor drops out.
+    # A negative rate is invalid even though its density is finite at zero.
     negative = Poisson(-1.0)
     @test !checkparams(negative)
     @test isfinite(logdensityof(negative, 0.0))
@@ -76,7 +76,7 @@ end
 
 @testset "density is total off the support" begin
     d = Poisson(4.0)
-    # The count is clamped before `loggamma`, so values below zero do not throw.
+    # Off-support values return `-Inf` without throwing.
     for x in (-1.0, -1.5, 2.5, Inf, -Inf, NaN, floatmax(Float64), -floatmax(Float64))
         @test logdensityof(d, x) == -Inf
     end
@@ -88,7 +88,7 @@ end
 @testset "a zero rate puts all the mass on zero" begin
     d = Poisson(0.0)
     @test checkparams(d)
-    # The zero term must win over `log(0)`.
+    # The `0^0` factor contributes one.
     @test logdensityof(d, 0.0) == 0.0
     @test logdensityof(d, 1.0) == -Inf
     @test mean(d) == 0.0
@@ -100,7 +100,7 @@ end
 end
 
 @testset "normalization" begin
-    # The support has no upper end, so sum far enough out to cover it.
+    # `k <= 400` captures the tail for all tested rates.
     for λ in (0.5, 1.0, 4.0, 11.0, 40.0)
         @test sum(k -> densityof(Poisson(λ), float(k)), 0:400) ≈ 1
     end
@@ -115,7 +115,7 @@ end
             @test densityof(d, x) ≈ Distributions.pdf(r, k)
             @test cdf(d, x) ≈ Distributions.cdf(r, k)
             @test ccdf(d, x) ≈ Distributions.ccdf(r, k)
-            # Relative error is not useful when these log values are near zero.
+            # Use absolute tolerance near `log(1) == 0`.
             @test logcdf(d, x) ≈ Distributions.logcdf(r, k) atol = 1e-12
             @test logccdf(d, x) ≈ Distributions.logccdf(r, k) atol = 1e-12
         end
@@ -131,23 +131,23 @@ end
 
 @testset "distribution functions step at the atoms" begin
     d = Poisson(4.0)
-    # The CDF is constant between the atoms.
+    # The CDF is constant between integer outcomes.
     @test cdf(d, 2.0) == cdf(d, 2.999)
     @test cdf(d, -0.5) == 0.0
-    # A summed tail reaches one only up to rounding.
+    # The direct tail sum may round below one.
     @test ccdf(d, -0.5) ≈ 1.0
     @test logcdf(d, -1.0) == -Inf
 
-    # Each tail is summed on its own, so the two agree without cancelling.
+    # Directly summing both tails avoids cancellation.
     for k in 0:20
         @test cdf(d, float(k)) + ccdf(d, float(k)) ≈ 1.0
     end
 
-    # Inverting the CDF recovers each atom while the two sides still differ.
+    # CDF inversion recovers atoms until the CDF rounds to one.
     ks = [k for k in 0:20 if cdf(d, float(k)) < 1.0]
     @test [quantile(d, cdf(d, float(k))) for k in ks] == float.(ks)
 
-    # Out-of-range probabilities still return an outcome in the support.
+    # Invalid probabilities still map to the support.
     for q in (-0.001, 1.001, -Inf, Inf, NaN)
         @test insupport(d, quantile(d, q))
     end
@@ -155,23 +155,23 @@ end
 
 @testset "sums stop above the mean" begin
     d = Poisson(4.0)
-    # The horizon covers the whole `Float64` range of the CDF.
+    # The horizon exhausts the `Float64` tail mass.
     @test cdf(d, float(ProbabilityMeasures.horizon(d))) ≈ 1.0
     @test ccdf(d, float(ProbabilityMeasures.horizon(d))) == 0.0
-    # A probability of one has no finite answer, so the last outcome stands in.
+    # The horizon stands in for the infinite quantile at `q = 1`.
     @test quantile(d, 1.0) == float(ProbabilityMeasures.horizon(d))
 
-    # A rate that cannot be counted gives an empty horizon.
+    # Non-finite and sufficiently negative rates have no usable horizon.
     @test ProbabilityMeasures.horizon(Poisson(NaN)) == 0
     @test ProbabilityMeasures.horizon(Poisson(Inf)) == 0
     @test ProbabilityMeasures.horizon(Poisson(-Inf)) == 0
     @test ProbabilityMeasures.horizon(Poisson(-1e300)) == 0
 
-    # A finite rate whose bound passes `typemax(Int)` counts too, and once did throw.
+    # Finite rates can also overflow the `Int` horizon.
     for λ in (1e19, 1e20, 1e300, prevfloat(floatmax(Float64)))
         @test ProbabilityMeasures.horizon(Poisson(λ)) == 0
     end
-    # The largest rate that still counts, and the smallest that does not.
+    # Pin the `Float64` cutoff near `typemax(Int)`.
     @test ProbabilityMeasures.horizon(Poisson(9.2e18)) > 0
     @test ProbabilityMeasures.horizon(Poisson(9.3e18)) == 0
 end
@@ -196,7 +196,7 @@ end
 end
 
 @testset "sample derivative is zero" begin
-    # A sample changes in steps as `λ` changes.
+    # Inverse-CDF samples are piecewise constant in `λ`.
     g = ForwardDiff.derivative(l -> rand(Xoshiro(7), Poisson(l)), 4.0)
     @test iszero(g)
 end
@@ -217,6 +217,6 @@ end
     @test mean(draws) ≈ mean(d) atol = 0.02
     @test var(draws) ≈ var(d) atol = 0.05
 
-    # The draw inverts the CDF, so a large rate is not lost to underflow.
+    # CDF inversion remains valid when `exp(-λ)` underflows.
     @test all(x -> insupport(d, x), rand(Xoshiro(1), Poisson(1000.0), 8))
 end

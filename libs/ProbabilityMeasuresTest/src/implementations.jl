@@ -108,10 +108,10 @@ end
     Poisson(0.5), Poisson(4.0), Poisson(2.5f0)
 ]
 
-# A negative rate stays finite at zero, the first test point, and is tested separately.
+# Finite negative rates need separate tests because their density is finite at zero.
 _invalids(::Poisson) = (Poisson(-Inf), Poisson(Inf), Poisson(NaN))
 
-# Use a rate whose logarithm is not zero.
+# Exercise the `k * log(λ)` term.
 _exactparams(::Poisson) = Poisson(2)
 
 @implements MeasureInterface{(:meanvector, :cov)} Multinomial [

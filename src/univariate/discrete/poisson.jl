@@ -8,35 +8,15 @@ function
 P(X = k) = \\frac{\\lambda^k e^{-\\lambda}}{k!}.
 ```
 
-# Arguments
+`λ` is both the mean and variance. It must be finite and non-negative. The constructor
+does not validate it; use [`validateparams`](@ref) for user input.
 
-  - `λ::Number`: the rate, equal to both mean and variance
+Density results follow Julia's promotion rules for `λ` and the evaluation point.
+Samples use `float(typeof(λ))`.
 
-The result type follows `λ` and the value being evaluated. Samples use
-`float(typeof(λ))`.
-
-# Cost
-
-The log-density takes constant time. Entropy, the CDFs, quantiles, and sampling have
-no closed form and sum over the support, which has no upper end, so they stop twenty
-standard deviations above the mean. The number of terms grows with `λ`.
-
-Reading that bound off `λ` is a branch on a value, so these five are the one place in
-the package a traced or device-side call cannot reach. The closed forms are no better:
-the regularized incomplete gamma and a rejection sampler branch on a value too.
-
-One CDF or one draw at `λ = 1e6` sums about a million terms. Past roughly `9.2e18` the
-bound no longer fits in an `Int`, and these five return `NaN`. See [`horizon`](@ref).
-
-The constructor does not check `λ`. A negative rate still gives a finite log-density
-at `k = 0`, so validate user input with [`validateparams`](@ref). Use
-[`checkparams`](@ref) when only a boolean result is needed.
-
-```julia
-checkparams(Poisson(-1.0))               # false
-logdensityof(Poisson(-1.0), 0.0)         # finite, and wrong
-isnan(logdensityof(Poisson(-1.0), 1.0))  # true
-```
+`logdensityof` is constant time. `entropy`, `cdf`, `ccdf`, `quantile`, and `rand` sum
+through [`horizon(d)`](@ref), so they cost `O(λ)` and cannot run in traced or
+device-side code. They return `NaN` when no usable `Int` horizon exists.
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateMeasure
     λ::L
@@ -53,46 +33,29 @@ support(::Poisson) = NonNegativeIntegers()
 
 The largest outcome a sum over the support of `d` includes.
 
-The support has no upper end, so the sums stop twenty standard deviations above the
-mean. What is left out is smaller than the rounding error of a `BigFloat` sum at the
-default precision, and far smaller than that of a `Float64` one.
-
-The bound is a plain `Int` read off the value of `λ`, which is what keeps the summing
-methods out of traced and device-side code.
-
-A rate whose bound does not fit in an `Int`, or that is negative enough to put the
-bound below zero, gives a horizon of zero. The summing methods return `NaN` there
-rather than the total of a loop that cannot cover the support.
+The horizon is ``\\lceil \\lambda + 20\\sqrt{\\lambda} + 60 \\rceil``. The omitted tail is
+smaller than the rounding error at the default `BigFloat` precision. `horizon` returns
+zero if the bound is non-positive, non-finite, or too large for `Int`.
 """
 @inline function horizon(d::Poisson)
     λ = float(d.λ)
     n = λ + 20 * sqrt(max(λ, zero(λ))) + 60
-    #=
-      `ceil(Int, n)` throws once `n` passes `typemax(Int)`, which a rate above roughly
-      `9.2e18` reaches. Rule that out here, along with `Inf` and `NaN`, which fail both
-      comparisons.
-    =#
+    # Guard `ceil(Int, n)` against overflow and non-finite values.
     return ((n > zero(n)) & (n <= typemax(Int))) ? ceil(Int, n) : 0
 end
 
 @inline function DensityInterface.logdensityof(d::Poisson, x::Number)
     T = masstype(d, x)
     λ, k = convert(T, d.λ), convert(T, x)
-    # Skip the zero term so `λ = 0` works.
+    # Define `0 * log(0)` as zero.
     a = select(k == zero(T), () -> zero(T), () -> k * logt(λ))
-    # Clamp the count because `loggamma` rejects negative integers.
+    # `loggamma` rejects negative integers before the support check runs.
     g = loggamma(max(k, zero(T)) + one(T))
-    #=
-      `log(k!)` overflows before `k log λ` does and outgrows it in any case, so a count
-      that overflows it carries no mass. Returning `-Inf` there keeps the difference
-      from becoming `Inf - Inf`.
-    =#
+    # If `log(k!)` overflows, the mass is zero; avoid `Inf - Inf`.
     return select(insupport(d, x) & isfinite(g), () -> a - λ - g, () -> convert(T, -Inf))
 end
 
-# Inverting the CDF costs no more than one pass over the horizon, and unlike the
-# textbook product-of-uniforms draw it does not lose every sample to underflow once
-# `exp(-λ)` rounds to zero.
+# CDF inversion avoids the `exp(-λ)` underflow in product-of-uniforms sampling.
 @inline function Base.rand(rng::AbstractRNG, d::Poisson)
     return quantile(d, rand(rng, noisetype(d)))
 end
@@ -100,24 +63,20 @@ end
 Statistics.mean(d::Poisson) = d.λ
 Statistics.var(d::Poisson) = d.λ
 
-#=
-  No closed form, so sum over the support. A horizon of zero means the loop cannot
-  cover the support, so these four return `NaN` rather than a partial total.
-=#
+# A zero horizon means the support cannot be summed safely.
 function entropy(d::Poisson)
     T = eltype(d)
     kmax = horizon(d)
     h = zero(T)
     for k in 0:kmax
         logp = logdensityof(d, convert(T, k))
-        # An outcome with zero probability contributes zero, not `0 * -Inf = NaN`.
+        # Treat `0 * -Inf` as zero.
         h -= select(isfinite(logp), () -> exp(logp) * logp, () -> zero(T))
     end
     return select(kmax > 0, () -> h, () -> convert(T, NaN))
 end
 
-# Sum each tail directly so a small tail is not lost by subtracting from one. Clamp
-# the result because rounding can make the sum slightly greater than one.
+# Sum the lower tail directly and clamp roundoff above one.
 function cdf(d::Poisson, x::Number)
     T = masstype(d, x)
     kmax = horizon(d)
@@ -139,9 +98,8 @@ function ccdf(d::Poisson, x::Number)
     return select(kmax > 0, () -> min(c, one(T)), () -> convert(T, NaN))
 end
 
-# Count every partial sum below `q` rather than stopping at the first one that is not,
-# which keeps the loop length independent of `q`. Summing in the same order as `cdf`
-# makes `quantile(d, cdf(d, k))` return `k` unless the CDF has already rounded to one.
+# Complete the loop to keep control flow independent of `q`. Matching `cdf`'s summation
+# order preserves `quantile(d, cdf(d, k)) == k` until the CDF rounds to one.
 function Statistics.quantile(d::Poisson, q::Number)
     T = masstype(d, q)
     kmax = horizon(d)
@@ -152,11 +110,9 @@ function Statistics.quantile(d::Poisson, q::Number)
         total += exp(logdensityof(d, convert(T, k)))
         i += select(total < q, () -> one(T), () -> zero(T))
     end
-    # Copy the count before capturing it: a closure over a variable the loop assigns
-    # puts that variable on the heap.
+    # Copy the loop-assigned value to avoid boxing the closure capture.
     below = i
-    # A probability at or above one has no finite answer, so return the last outcome
-    # the sum reaches.
+    # The horizon stands in for the infinite quantile at `q >= 1`.
     value = select(q >= one(T), () -> hi, () -> min(below, hi))
     return select(kmax > 0, () -> value, () -> convert(T, NaN))
 end
