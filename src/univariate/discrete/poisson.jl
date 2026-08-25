@@ -25,6 +25,9 @@ Reading that bound off `λ` is a branch on a value, so these five are the one pl
 the package a traced or device-side call cannot reach. The closed forms are no better:
 the regularized incomplete gamma and a rejection sampler branch on a value too.
 
+One CDF or one draw at `λ = 1e6` sums about a million terms. Past roughly `9.2e18` the
+bound no longer fits in an `Int`, and these five return `NaN`. See [`horizon`](@ref).
+
 The constructor does not check `λ`. A negative rate still gives a finite log-density
 at `k = 0`, so validate user input with [`validateparams`](@ref). Use
 [`checkparams`](@ref) when only a boolean result is needed.
@@ -55,13 +58,21 @@ mean. What is left out is smaller than the rounding error of a `BigFloat` sum at
 default precision, and far smaller than that of a `Float64` one.
 
 The bound is a plain `Int` read off the value of `λ`, which is what keeps the summing
-methods out of traced and device-side code. A rate that is invalid or too large to
-count gives a single-term horizon; its density is already non-finite.
+methods out of traced and device-side code.
+
+A rate whose bound does not fit in an `Int`, or that is negative enough to put the
+bound below zero, gives a horizon of zero. The summing methods return `NaN` there
+rather than the total of a loop that cannot cover the support.
 """
 @inline function horizon(d::Poisson)
     λ = float(d.λ)
     n = λ + 20 * sqrt(max(λ, zero(λ))) + 60
-    return (isfinite(n) & (n > zero(n))) ? ceil(Int, n) : 0
+    #=
+      `ceil(Int, n)` throws once `n` passes `typemax(Int)`, which a rate above roughly
+      `9.2e18` reaches. Rule that out here, along with `Inf` and `NaN`, which fail both
+      comparisons.
+    =#
+    return ((n > zero(n)) & (n <= typemax(Int))) ? ceil(Int, n) : 0
 end
 
 @inline function DensityInterface.logdensityof(d::Poisson, x::Number)
@@ -89,37 +100,43 @@ end
 Statistics.mean(d::Poisson) = d.λ
 Statistics.var(d::Poisson) = d.λ
 
-# No closed form, so sum over the support.
+#=
+  No closed form, so sum over the support. A horizon of zero means the loop cannot
+  cover the support, so these four return `NaN` rather than a partial total.
+=#
 function entropy(d::Poisson)
     T = eltype(d)
+    kmax = horizon(d)
     h = zero(T)
-    for k in 0:horizon(d)
+    for k in 0:kmax
         logp = logdensityof(d, convert(T, k))
         # An outcome with zero probability contributes zero, not `0 * -Inf = NaN`.
         h -= select(isfinite(logp), () -> exp(logp) * logp, () -> zero(T))
     end
-    return h
+    return select(kmax > 0, () -> h, () -> convert(T, NaN))
 end
 
 # Sum each tail directly so a small tail is not lost by subtracting from one. Clamp
 # the result because rounding can make the sum slightly greater than one.
 function cdf(d::Poisson, x::Number)
     T = masstype(d, x)
+    kmax = horizon(d)
     c = zero(T)
-    for k in 0:horizon(d)
+    for k in 0:kmax
         c += select(k <= x, () -> exp(logdensityof(d, convert(T, k))), () -> zero(T))
     end
-    return min(c, one(T))
+    return select(kmax > 0, () -> min(c, one(T)), () -> convert(T, NaN))
 end
 
 # Beyond the horizon this returns zero rather than the true remaining mass.
 function ccdf(d::Poisson, x::Number)
     T = masstype(d, x)
+    kmax = horizon(d)
     c = zero(T)
-    for k in 0:horizon(d)
+    for k in 0:kmax
         c += select(k > x, () -> exp(logdensityof(d, convert(T, k))), () -> zero(T))
     end
-    return min(c, one(T))
+    return select(kmax > 0, () -> min(c, one(T)), () -> convert(T, NaN))
 end
 
 # Count every partial sum below `q` rather than stopping at the first one that is not,
@@ -140,7 +157,8 @@ function Statistics.quantile(d::Poisson, q::Number)
     below = i
     # A probability at or above one has no finite answer, so return the last outcome
     # the sum reaches.
-    return select(q >= one(T), () -> hi, () -> min(below, hi))
+    value = select(q >= one(T), () -> hi, () -> min(below, hi))
+    return select(kmax > 0, () -> value, () -> convert(T, NaN))
 end
 
 function Base.show(io::IO, d::Poisson)

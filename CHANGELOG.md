@@ -58,7 +58,8 @@ and this project adheres to [Semantic Versioning].
   from a device kernel; the closed-form alternatives, the regularized incomplete gamma
   and a rejection sampler, branch on a value too. Draws invert the CDF rather than
   multiplying uniforms, so a large rate does not lose every sample once `exp(-λ)` rounds
-  to zero.
+  to zero. The cost of the five is linear in `λ`, and a rate whose bound passes
+  `typemax(Int)` puts them all at `NaN`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`

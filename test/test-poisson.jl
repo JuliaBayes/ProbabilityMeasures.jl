@@ -161,11 +161,31 @@ end
     # A probability of one has no finite answer, so the last outcome stands in.
     @test quantile(d, 1.0) == float(ProbabilityMeasures.horizon(d))
 
-    # A rate that cannot be counted leaves one term rather than a hopeless loop.
+    # A rate that cannot be counted gives an empty horizon.
     @test ProbabilityMeasures.horizon(Poisson(NaN)) == 0
     @test ProbabilityMeasures.horizon(Poisson(Inf)) == 0
     @test ProbabilityMeasures.horizon(Poisson(-Inf)) == 0
     @test ProbabilityMeasures.horizon(Poisson(-1e300)) == 0
+
+    # A finite rate whose bound passes `typemax(Int)` counts too, and once did throw.
+    for λ in (1e19, 1e20, 1e300, prevfloat(floatmax(Float64)))
+        @test ProbabilityMeasures.horizon(Poisson(λ)) == 0
+    end
+    # The largest rate that still counts, and the smallest that does not.
+    @test ProbabilityMeasures.horizon(Poisson(9.2e18)) > 0
+    @test ProbabilityMeasures.horizon(Poisson(9.3e18)) == 0
+end
+
+@testset "an empty horizon gives NaN, not a partial sum" begin
+    for λ in (1e19, 1e300, -100.0)
+        d = Poisson(λ)
+        @test ProbabilityMeasures.horizon(d) == 0
+        @test isnan(cdf(d, 3.0))
+        @test isnan(ccdf(d, 3.0))
+        @test isnan(quantile(d, 0.5))
+        @test isnan(entropy(d))
+        @test isnan(rand(Xoshiro(1), d))
+    end
 end
 
 @testset "log-density gradient with respect to the rate" begin
