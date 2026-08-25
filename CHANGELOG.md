@@ -49,10 +49,12 @@ and this project adheres to [Semantic Versioning].
 - `Multinomial(n, p)`, with the `DiscreteMultivariateMeasure` alias and count-vector
   support. Its density promotes the types of `p` and the count vector, while its
   moments, covariance and fixed-loop sampling preserve the numeric type of `p`.
-- `Poisson(λ)` and its `NonNegativeIntegers` support. Density is constant time.
-  Entropy, CDFs, quantiles, and sampling use a truncated sum, cost `O(λ)`, and cannot
-  run in traced or device-side code. Sampling uses CDF inversion to avoid underflow at
-  large rates. These operations return `NaN` if the truncation bound exceeds `Int`.
+- `Poisson(λ)` and its `NonNegativeIntegers` support. Density is constant time, as are
+  CDFs, quantiles, and sampling for plain floating-point arguments, which use the
+  regularized incomplete gamma. The wrapped numbers differentiation and tracing tools
+  substitute fall back to a truncated sum that costs `O(λ)` and cannot run in traced or
+  device-side code. Entropy always sums. Sampling uses CDF inversion to avoid underflow
+  at large rates. These operations return `NaN` if the truncation bound exceeds `Int`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
@@ -71,6 +73,9 @@ and this project adheres to [Semantic Versioning].
   and skips pathwise sampling derivatives for discrete draws.
 - Discrete normalization tests now skip supports without a finite maximum. `Poisson`
   provides its own normalization test.
+- The conformance allocation check now keeps every allocation but only the dynamic
+  dispatch in this package's own code. `gamma_inc` reaches a `ccall` wrapper in
+  SpecialFunctions that AllocCheck cannot resolve and that allocates nothing.
 - The conformance suite recognizes structural parameters, those that set a measure's
   support or its loop lengths, such as `Binomial`'s `n`. They are held fixed rather
   than swept through the AD and element-type checks, which would otherwise ask for a

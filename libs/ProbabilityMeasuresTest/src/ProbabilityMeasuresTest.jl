@@ -1,6 +1,6 @@
 module ProbabilityMeasuresTest
 
-using AllocCheck: check_allocs
+using AllocCheck: AllocCheck, check_allocs
 using ConstructionBase: constructorof
 using DensityInterface: densityof, logdensityof
 using DifferentiationInterface: DifferentiationInterface

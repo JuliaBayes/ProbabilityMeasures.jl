@@ -15,7 +15,7 @@ using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
-using SpecialFunctions: erfc, erfcinv, logerfc, loggamma
+using SpecialFunctions: erfc, erfcinv, gamma_inc, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 

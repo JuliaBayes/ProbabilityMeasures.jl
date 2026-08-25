@@ -157,7 +157,8 @@ end
     d = Poisson(4.0)
     # The horizon exhausts the `Float64` tail mass.
     @test cdf(d, float(ProbabilityMeasures.horizon(d))) ≈ 1.0
-    @test ccdf(d, float(ProbabilityMeasures.horizon(d))) == 0.0
+    # The closed form reports the mass past the horizon, which a sum truncates away.
+    @test 0 < ccdf(d, float(ProbabilityMeasures.horizon(d))) < 1e-100
     # The horizon stands in for the infinite quantile at `q = 1`.
     @test quantile(d, 1.0) == float(ProbabilityMeasures.horizon(d))
 
@@ -186,6 +187,39 @@ end
         @test isnan(entropy(d))
         @test isnan(rand(Xoshiro(1), d))
     end
+end
+
+#=
+  A `Dual` is `Real` but not `AbstractFloat`, so it takes the summing path while a plain
+  float takes the closed form. Their values have to agree.
+=#
+@testset "both paths agree" begin
+    for λ in (0.5, 1.0, 4.0, 11.0, 40.0, 200.0)
+        d = Poisson(λ)
+        for k in 0:ceil(Int, λ + 4 * sqrt(λ))
+            x = float(k)
+            summed = ForwardDiff.value(cdf(d, ForwardDiff.Dual(x, 1.0)))
+            @test summed ≈ cdf(d, x) atol = 1e-12
+            summed = ForwardDiff.value(ccdf(d, ForwardDiff.Dual(x, 1.0)))
+            @test summed ≈ ccdf(d, x) atol = 1e-12
+        end
+        for q in (0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 0.999)
+            summed = ForwardDiff.value(quantile(d, ForwardDiff.Dual(q, 1.0)))
+            @test summed == quantile(d, q)
+        end
+    end
+end
+
+@testset "the closed form keeps its type" begin
+    for T in (Float32, Float64, BigFloat)
+        d = Poisson(T(4))
+        @test cdf(d, T(2)) isa T
+        @test ccdf(d, T(2)) isa T
+        @test quantile(d, T(1) / 2) isa T
+    end
+    # A `BigFloat` argument reaches the closed form and keeps its precision.
+    @test cdf(Poisson(big"4.0"), big"2.0") isa BigFloat
+    @test cdf(Poisson(big"4.0"), big"2.0") ≈ cdf(Poisson(4.0), 2.0) atol = 1e-14
 end
 
 @testset "log-density gradient with respect to the rate" begin
