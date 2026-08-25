@@ -39,6 +39,14 @@ insupport(::NonNegativeReals, x::Number) = isfinite(x) & (x >= zero(x))
 Base.minimum(::NonNegativeReals) = 0.0
 Base.maximum(::NonNegativeReals) = Inf
 
+"The positive real line, ``(0, \\infty)``."
+struct PositiveReals <: Support end
+
+insupport(::PositiveReals, x::Number) = isfinite(x) & (x > zero(x))
+
+Base.minimum(::PositiveReals) = 0.0
+Base.maximum(::PositiveReals) = Inf
+
 """
     RealInterval(a, b)
 
@@ -78,6 +86,28 @@ insupport(::NonNegativeIntegers, x::Number) = isinteger(x) & (x >= zero(x))
 
 Base.minimum(::NonNegativeIntegers) = 0
 Base.maximum(::NonNegativeIntegers) = Inf
+
+"""
+    IntegerSimplex(n, k)
+
+The non-negative integer vectors of length `k` whose entries sum to `n`.
+"""
+struct IntegerSimplex{N<:Integer,K<:Integer} <: Support
+    n::N
+    k::K
+end
+
+function insupport(s::IntegerSimplex, x::AbstractVector{<:Number})
+    length(x) == s.k || return false
+    remaining = s.n
+    ok = true
+    for xᵢ in x
+        valid = isfinite(xᵢ) & isinteger(xᵢ) & (xᵢ >= zero(xᵢ)) & (xᵢ <= remaining)
+        ok &= valid
+        remaining -= select(valid, () -> xᵢ, () -> zero(xᵢ))
+    end
+    return ok & iszero(remaining)
+end
 
 """
     RealVectors(n)

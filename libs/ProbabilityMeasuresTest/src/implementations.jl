@@ -9,6 +9,13 @@ const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entr
 _invalids(::Normal) = (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0))
 _exactparams(::Normal) = Normal(0, 1)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} LogNormal [
+    LogNormal(0.0, 1.0), LogNormal(-1.0, 0.5), LogNormal(2.0f0, 0.75f0)
+]
+
+_invalids(::LogNormal) = (LogNormal(0.0, -1.0), LogNormal(0.0, 0.0), LogNormal(Inf, 1.0))
+_exactparams(::LogNormal) = LogNormal(0, 1)
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Exponential [
     Exponential(1.0), Exponential(0.4), Exponential(3.0f0)
 ]
@@ -37,6 +44,15 @@ end
 _invalids(::Laplace) = (Laplace(0.0, -1.0), Laplace(0.0, 0.0), Laplace(Inf, 1.0))
 # Use scale 2 so `log(2b)` is not zero during the precision check.
 _exactparams(::Laplace) = Laplace(0, 2)
+
+@implements MeasureInterface{(:cdf, :quantile, :median, :entropy)} Cauchy [
+    Cauchy(0.0, 1.0), Cauchy(-2.5, 0.5), Cauchy(3.0f0, 2.0f0)
+]
+
+function _invalids(::Cauchy)
+    return (Cauchy(0.0, -1.0), Cauchy(0.0, 0.0), Cauchy(0.0, Inf), Cauchy(Inf, 1.0))
+end
+_exactparams(::Cauchy) = Cauchy(0, 2)
 
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Categorical [
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
@@ -97,6 +113,50 @@ _invalids(::Poisson) = (Poisson(-Inf), Poisson(Inf), Poisson(NaN))
 
 # Use a rate whose logarithm is not zero.
 _exactparams(::Poisson) = Poisson(2)
+
+@implements MeasureInterface{(:meanvector, :cov)} Multinomial [
+    Multinomial(5, [0.2, 0.3, 0.5]),
+    Multinomial(4, Float32[0.25, 0.25, 0.5]),
+    Multinomial(3, [1.0]),
+]
+
+_structural(::Multinomial) = (:n,)
+
+function _invalids(d::Multinomial)
+    negative = map(pᵢ -> -one(float(pᵢ)), d.p)
+    nonfinite = map(pᵢ -> oftype(float(pᵢ), NaN), d.p)
+    return (
+        Multinomial(-one(d.n), d.p), Multinomial(d.n, negative), Multinomial(d.n, nonfinite)
+    )
+end
+
+# Dyadic weights keep exact log-densities finite at corners and interior points.
+function _exactparams(d::Multinomial)
+    k = length(d.p)
+    p = [i == 1 ? 1//2^(k - 1) : 1//2^(k - i + 1) for i in 1:k]
+    return Multinomial(d.n, p)
+end
+
+# Several conformance tests use only the first point, so make it an interior point.
+function default_testpoints(d::Multinomial)
+    T, k = _elscalar(d), length(d.p)
+    spread = [convert(T, fld(d.n + k - i, k)) for i in 1:k]
+    corners = [[i == j ? convert(T, d.n) : zero(T) for i in 1:k] for j in 1:k]
+    return unique(pushfirst!(corners, spread))
+end
+
+function _extremepoints(d::Multinomial)
+    k = length(d.p)
+    return (
+        fill(Inf, k),
+        fill(-Inf, k),
+        fill(NaN, k),
+        fill(floatmax(Float64), k),
+        zeros(k),
+        zeros(k + 1),
+        Float64[],
+    )
+end
 
 # Optional methods for multivariate measures.
 const MULTIVARIATE_OPTIONALS = (:meanvector, :cov, :entropy)

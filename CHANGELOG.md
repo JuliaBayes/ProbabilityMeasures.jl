@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning].
 - `AbstractProbabilityMeasure{F,S}` and the normalized-only measure interface:
   `logdensityof`, `rand`, `support`, `insupport`, `params`, `checkparams`, and the
   moment/distribution-function surface.
-- The `RealLine`, `NonNegativeReals`, `RealInterval`, `IntegerRange` and `RealVectors`
-  supports. `PositiveReals` and `UnitInterval` will arrive with the first measure that
-  needs one.
-- `Normal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with heterogeneous
-  parameter types and no promotion or validation at construction.
+- The `RealLine`, `NonNegativeReals`, `PositiveReals`, `RealInterval`, `IntegerRange`,
+  `IntegerSimplex` and `RealVectors` supports. `UnitInterval` will arrive with the first
+  measure that needs one.
+- `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with
+  heterogeneous parameter types and no promotion or validation at construction.
 - `MvNormal(μ, L)`, the first multivariate measure, with the
   `ContinuousMultivariateMeasure` alias it dispatches on. It is parameterized by the
   Cholesky factor rather than the covariance, which makes the reparameterized draw
@@ -44,6 +44,11 @@ and this project adheres to [Semantic Versioning].
 - `Laplace(μ, b)`, whose density has a kink at `x = μ`. `logcdf` and `logccdf`
   compute the near tail directly, so they stay finite where `cdf` and `ccdf` underflow,
   and the reparameterized draw is the difference of two exponential samples.
+- `Cauchy(μ, σ)`, with direct stable formulas for both tails and a reparameterized
+  inverse-CDF draw. Its undefined mean, variance, and standard deviation return `NaN`.
+- `Multinomial(n, p)`, with the `DiscreteMultivariateMeasure` alias and count-vector
+  support. Its density promotes the types of `p` and the count vector, while its
+  moments, covariance and fixed-loop sampling preserve the numeric type of `p`.
 - `Poisson(λ)`, the first measure whose support has no upper end, and the
   `NonNegativeIntegers` support it needs. Its log-density is constant time, but entropy,
   the CDFs, quantiles and sampling have no closed form and sum over the support, so they
@@ -54,7 +59,6 @@ and this project adheres to [Semantic Versioning].
   and a rejection sampler, branch on a value too. Draws invert the CDF rather than
   multiplying uniforms, so a large rate does not lose every sample once `exp(-λ)` rounds
   to zero.
-
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`

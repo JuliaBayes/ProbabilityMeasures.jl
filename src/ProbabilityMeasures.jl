@@ -12,7 +12,7 @@ that checks it.
 module ProbabilityMeasures
 
 using DensityInterface: DensityInterface, densityof, logdensityof
-using IrrationalConstants: invsqrt2, log2π, logtwo, sqrt2
+using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
 using SpecialFunctions: erfc, erfcinv, logerfc, loggamma
@@ -25,9 +25,11 @@ include("core/support.jl")
 include("core/interface.jl")
 
 include("univariate/continuous/normal.jl")
+include("univariate/continuous/lognormal.jl")
 include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
+include("univariate/continuous/cauchy.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
@@ -35,6 +37,7 @@ include("univariate/discrete/binomial.jl")
 include("univariate/discrete/poisson.jl")
 
 include("multivariate/continuous/mvnormal.jl")
+include("multivariate/discrete/multinomial.jl")
 
 # Export the operations commonly needed by probabilistic programs.
 
@@ -43,11 +46,18 @@ export AbstractProbabilityMeasure
 export VariateForm, Univariate, Multivariate
 export ValueSupport, Continuous, Discrete
 export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
-export ContinuousMultivariateMeasure
+export ContinuousMultivariateMeasure, DiscreteMultivariateMeasure
 
 # Supports
-export Support, RealLine, NonNegativeReals, RealInterval, IntegerRange
-export NonNegativeIntegers, RealVectors
+export Support,
+    RealLine,
+    NonNegativeReals,
+    PositiveReals,
+    NonNegativeIntegers,
+    RealInterval,
+    IntegerRange,
+    IntegerSimplex,
+    RealVectors
 export support, insupport
 
 # Interface
@@ -61,13 +71,16 @@ export mean, var, std, median, quantile, cov
 
 # Measures
 export Normal
+export LogNormal
 export Exponential
 export Uniform
 export Laplace
+export Cauchy
 export Categorical
 export Bernoulli
 export Binomial
 export Poisson
 export MvNormal
+export Multinomial
 
 end
