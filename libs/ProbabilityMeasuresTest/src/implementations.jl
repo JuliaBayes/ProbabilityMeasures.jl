@@ -80,6 +80,14 @@ end
 
 # Use a shape and a scale that leave `loggamma(α)` and `log(θ)` non-zero.
 _exactparams(::Gamma) = Gamma(3, 2)
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Beta [
+    Beta(2.0, 3.0), Beta(1.0, 1.0), Beta(0.5, 0.5), Beta(2.0f0, 5.0f0)
+]
+
+_invalids(::Beta) = (Beta(0.0, 1.0), Beta(1.0, -1.0), Beta(Inf, 1.0))
+
+# Integer shapes exercise the log-beta constant and the `(α - 1) log x` term.
+_exactparams(::Beta) = Beta(2, 3)
 
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Categorical [
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])

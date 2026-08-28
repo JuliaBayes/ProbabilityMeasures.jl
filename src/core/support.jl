@@ -121,3 +121,11 @@ end
 function insupport(s::RealVectors, x::AbstractVector{<:Number})
     return (length(x) == s.n) & all(isfinite, x)
 end
+
+"The unit interval, ``[0, 1]``."
+struct UnitInterval <: Support end
+
+insupport(::UnitInterval, x::Number) = isfinite(x) & (x >= zero(x)) & (x <= one(x))
+
+Base.minimum(::UnitInterval) = 0.0
+Base.maximum(::UnitInterval) = 1.0

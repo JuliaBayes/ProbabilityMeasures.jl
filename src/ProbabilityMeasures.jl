@@ -16,6 +16,8 @@ using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
 using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
+using SpecialFunctions:
+    beta_inc, beta_inc_inv, digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 
@@ -33,6 +35,7 @@ include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
 include("univariate/continuous/cauchy.jl")
 include("univariate/continuous/gamma.jl")
+include("univariate/continuous/beta.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
@@ -61,7 +64,8 @@ export Support,
     RealInterval,
     IntegerRange,
     IntegerSimplex,
-    RealVectors
+    RealVectors,
+    UnitInterval
 export support, insupport
 
 # Interface
@@ -82,6 +86,7 @@ export Uniform
 export Laplace
 export Cauchy
 export Gamma
+export Beta
 export Categorical
 export Bernoulli
 export Binomial

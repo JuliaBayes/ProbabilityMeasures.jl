@@ -8,7 +8,8 @@
 ProbabilityMeasures.jl provides normalized probability measures designed for use in
 probabilistic programs. Its implementations are type-generic, allocation-free in core
 density and sampling operations, and compatible with automatic differentiation,
-broadcasting on GPU arrays, and Reactant tracing.
+broadcasting on GPU arrays, and Reactant tracing. `Beta` is the one exception to the
+allocation and differentiation claims; see `Available API` below.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
 `Exponential`, `Weibull`, `Gamma`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`,
