@@ -129,3 +129,30 @@ insupport(::UnitInterval, x::Number) = isfinite(x) & (x >= zero(x)) & (x <= one(
 
 Base.minimum(::UnitInterval) = 0.0
 Base.maximum(::UnitInterval) = 1.0
+
+"""
+    RealSimplex(k)
+
+The non-negative real vectors of length `k` whose entries sum to one.
+
+The sum is checked to `sqrt(eps)` of the working precision, as [`Categorical`](@ref)
+checks its probabilities.
+"""
+struct RealSimplex <: Support
+    k::Int
+end
+
+function insupport(s::RealSimplex, x::AbstractVector{<:Number})
+    length(x) == s.k || return false
+    total = zero(eltype(x))
+    # `min` keeps a `NaN` visible without changing numeric types.
+    least = zero(eltype(x))
+    finite = true
+    for xᵢ in x
+        finite &= isfinite(xᵢ)
+        total += xᵢ
+        least = min(least, xᵢ)
+    end
+    tol = sqrt(eps(basefloat(float(eltype(x)))))
+    return finite & (least >= zero(least)) & (abs(total - one(total)) <= tol)
+end

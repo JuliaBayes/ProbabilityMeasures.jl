@@ -133,6 +133,13 @@ contains standard deviations, not variances.
 in `IntegerSimplex(n, length(p))`, and `var` and `std` return marginal values. As with
 `MvNormal`, multivariate `cdf`, `quantile`, and `median` are not provided.
 
+`Dirichlet(α)` supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`,
+`std`, `entropy`, `params`, `support`, `insupport`, and `checkparams`. Its samples are
+probability vectors in `RealSimplex(length(α))`, and because a draw sums to one, the
+density is the one with respect to the first `length(α) - 1` entries, matching
+Distributions.jl. Sampling breaks the unit interval into pieces drawn from `Beta`, so
+it carries the same differentiation limits.
+
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
 

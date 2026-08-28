@@ -297,3 +297,43 @@ function _extremepoints(d::MvNormal)
         Float64[],
     )
 end
+
+@implements MeasureInterface{MULTIVARIATE_OPTIONALS} Dirichlet [
+    Dirichlet([2.0, 3.0, 5.0]), Dirichlet([1.0, 1.0]), Dirichlet(Float32[0.5, 1.5, 2.0])
+]
+
+function _invalids(d::Dirichlet)
+    zeroed = map(αᵢ -> zero(float(αᵢ)), d.α)
+    negative = map(αᵢ -> -one(float(αᵢ)), d.α)
+    nonfinite = map(αᵢ -> oftype(float(αᵢ), Inf), d.α)
+    return (Dirichlet(zeroed), Dirichlet(negative), Dirichlet(nonfinite))
+end
+
+# Small integer shapes keep the log-gamma values exact for rational parameters.
+_exactparams(d::Dirichlet) = Dirichlet([i + 1 for i in eachindex(d.α)])
+
+#=
+  Use dyadic coordinates, which sum to one exactly in every precision. A coordinate such
+  as `1//3` does not: rounded to `Float32` its entries sum to `1 + 3e-8`, which this
+  measure's own tolerance accepts but a `Float64` reference rejects. `test_exactness`
+  also rationalizes each test point to a tolerance of `1//1000`, and only a point that
+  rationalizes exactly still sums to one and so stays in the support.
+=#
+function default_testpoints(d::Dirichlet)
+    T, k = _elscalar(d), length(d.α)
+    halving = [convert(T, i == k ? 1//2^(k - 1) : 1//2^i) for i in 1:k]
+    return unique([halving, reverse(halving)])
+end
+
+function _extremepoints(d::Dirichlet)
+    k = length(d.α)
+    return (
+        fill(Inf, k),
+        fill(-Inf, k),
+        fill(NaN, k),
+        fill(floatmax(Float64), k),
+        zeros(k),
+        fill(1 / k, k + 1),
+        Float64[],
+    )
+end

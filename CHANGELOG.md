@@ -101,6 +101,9 @@ and this project adheres to [Semantic Versioning].
 - The conformance allocation check now keeps every allocation but only the dynamic
   dispatch in this package's own code. `gamma_inc` reaches a `ccall` wrapper in
   SpecialFunctions that AllocCheck cannot resolve and that allocates nothing.
+- The conformance suite scalarizes a vector draw with a weighted sum rather than a
+  plain one. A plain sum is one for every draw on a simplex, which left `Dirichlet`'s
+  sample-derivative check with nothing to measure.
 - The conformance suite recognizes structural parameters, those that set a measure's
   support or its loop lengths, such as `Binomial`'s `n`. They are held fixed rather
   than swept through the AD and element-type checks, which would otherwise ask for a

@@ -44,6 +44,7 @@ include("univariate/discrete/poisson.jl")
 include("univariate/discrete/geometric.jl")
 
 include("multivariate/continuous/mvnormal.jl")
+include("multivariate/continuous/dirichlet.jl")
 include("multivariate/discrete/multinomial.jl")
 
 # Export the operations commonly needed by probabilistic programs.
@@ -64,6 +65,7 @@ export Support,
     RealInterval,
     IntegerRange,
     IntegerSimplex,
+    RealSimplex,
     RealVectors,
     UnitInterval
 export support, insupport
@@ -93,6 +95,7 @@ export Binomial
 export Poisson
 export Geometric
 export MvNormal
+export Dirichlet
 export Multinomial
 
 end
