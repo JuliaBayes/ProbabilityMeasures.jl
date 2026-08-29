@@ -15,12 +15,13 @@ using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
-using SpecialFunctions: erfc, erfcinv, gamma_inc, logerfc, loggamma
+using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logbeta, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 
 include("core/types.jl")
 include("core/mathfuns.jl")
+include("core/betainc.jl")
 include("core/support.jl")
 include("core/interface.jl")
 
@@ -30,13 +31,16 @@ include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
 include("univariate/continuous/cauchy.jl")
+include("univariate/continuous/tdist.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
 include("univariate/discrete/binomial.jl")
 include("univariate/discrete/poisson.jl")
 
+include("multivariate/continuous/locationscale.jl")
 include("multivariate/continuous/mvnormal.jl")
+include("multivariate/continuous/mvtdist.jl")
 include("multivariate/discrete/multinomial.jl")
 
 # Export the operations commonly needed by probabilistic programs.
@@ -76,11 +80,13 @@ export Exponential
 export Uniform
 export Laplace
 export Cauchy
+export TDist
 export Categorical
 export Bernoulli
 export Binomial
 export Poisson
 export MvNormal
+export MvTDist
 export Multinomial
 
 end

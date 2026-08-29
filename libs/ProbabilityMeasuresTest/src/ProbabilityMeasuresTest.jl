@@ -15,7 +15,7 @@ using JLArrays: JLArray
 using Mooncake: Mooncake
 using ProbabilityMeasures
 using ProbabilityMeasures: ContinuousMeasure, DiscreteMeasure, UnivariateMeasure
-using ProbabilityMeasures: DiagMvNormal, IsoMvNormal, unwhiten
+using ProbabilityMeasures: DiagMvNormal, IsoMvNormal, MvLocationScale, unwhiten
 using QuadGK: quadgk
 using Random: Xoshiro
 using ReverseDiff: ReverseDiff

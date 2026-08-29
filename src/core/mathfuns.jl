@@ -55,6 +55,27 @@ When invalid parameters make `a > 0`, `logt` returns `NaN` instead of throwing.
 end
 
 """
+    sqrtt(x)
+
+Like `sqrt`, but returns `NaN` instead of throwing for a negative input.
+"""
+@inline function sqrtt(x::Number)
+    return select(x < zero(x), () -> oftype(float(x), NaN), () -> sqrt(x))
+end
+
+"""
+    loggammat(x)
+
+Like `loggamma`, but returns `NaN` instead of throwing for a negative input.
+
+`loggamma` is already `Inf` at zero and the negative integers, so only the arguments
+between them need handling.
+"""
+@inline function loggammat(x::Number)
+    return select(x >= zero(x), () -> loggamma(x), () -> oftype(float(x), NaN))
+end
+
+"""
     basefloat(T) -> Type{<:AbstractFloat}
 
 The plain floating-point type inside `T`.

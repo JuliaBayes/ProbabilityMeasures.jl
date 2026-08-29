@@ -60,6 +60,30 @@ and this project adheres to [Semantic Versioning].
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
   gives a finite log-density, too large by `log(sum(p))`. It branches and throws, so it
   is the one exported name that cannot be traced.
+- `TDist(ν, μ, σ)`, Student's t with degrees of freedom, location and scale, and
+  `TDist(ν)` for the standard form. `σ` is a scale rather than a standard deviation, so
+  the variance is `σ²ν/(ν-2)`; `mean` is `NaN` at or below one degree of freedom and
+  `var` is `Inf` between one and two. One degree of freedom reproduces `Cauchy` and a
+  large one approaches `Normal`. The log-density uses `hypot` on the standardized value,
+  which keeps it finite where squaring would overflow, and sampling inverts the CDF, so
+  a draw and its quantile agree exactly.
+- `MvTDist(ν, μ, L)`, the multivariate t, taking the same matrix, `Diagonal` and
+  `UniformScaling` factors as `MvNormal`. `L * L'` is the scale matrix, not the
+  covariance: the covariance is `ν/(ν-2) L L'` and exists only above two degrees of
+  freedom. Sampling draws a direction on the sphere and a radius from the beta
+  representation of the squared distance, which avoids the rejection loop a chi-square
+  sampler would need and would not be traceable.
+- `ProbabilityMeasures.betainc`, `betaincinv` and `logbetainc`, the regularized
+  incomplete beta, its inverse, and its logarithm, on which both t measures rest.
+  SpecialFunctions provides the first two only for `Float16`, `Float32` and `Float64`,
+  and the conformance suite checks distribution functions in `BigFloat`. `betainc` sums
+  the Abramowitz & Stegun continued fraction by Lentz's method; `betaincinv` runs
+  Newton's method in `log(x)` inside a bracket. Both pass an argument and its complement
+  as a pair, so neither tail is recovered by subtracting the other from one, and
+  `logbetainc` takes the logarithm before the exponential, which is what keeps `logcdf`
+  and `logccdf` finite where the tails themselves underflow.
+- `ProbabilityMeasures.loggammat` and `sqrtt`, which return `NaN` where `loggamma` and
+  `sqrt` throw, so an invalid `ν` reaches the density as a non-finite value.
 - `libs/ProbabilityMeasuresTest`: a reusable conformance suite (`test_measure`)
   covering interface conformance, totality, type genericity, type stability,
   zero allocations, normalization, cdf/quantile, moments, four AD backends, and
@@ -80,6 +104,16 @@ and this project adheres to [Semantic Versioning].
   support or its loop lengths, such as `Binomial`'s `n`. They are held fixed rather
   than swept through the AD and element-type checks, which would otherwise ask for a
   dual-number or `Float32` trial count.
+- The two t measures reach the incomplete beta only for plain floating-point types,
+  which is what `cdf`, `ccdf`, `quantile` and `rand` need. The wrapped numbers
+  differentiation and tracing tools substitute have no method, so a draw carries
+  derivatives in the location and scale but not in the degrees of freedom, and a
+  `MethodError` says so rather than a silently zero gradient. `logdensityof` and
+  `entropy` are closed forms and differentiate in every parameter.
+- `MvNormal` and `MvTDist` share an internal `MvLocationScale` supertype holding the
+  whitening, log-determinant, shape-check and scale-matrix code. The three factor forms
+  dispatch on the factor itself rather than on the measure, so a new location-scale
+  measure gets all three by declaring its supertype.
 - `MvNormal`'s `logdensityof` allocates, unlike the univariate measures'. Whitening
   needs a temporary, grown by `vcat` so that reverse-mode backends, which reject array
   mutation, can differentiate it.

@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Uniform`, `Laplace`, `Cauchy`,  `Categorical`, `Bernoulli`, `Binomial`, `MvNormal`,
-and `Multinomial`.
+`Exponential`, `Uniform`, `Laplace`, `Cauchy`, `TDist`, `Categorical`, `Bernoulli`,
+`Binomial`, `MvNormal`, `MvTDist`, and `Multinomial`.
 
 ## Installation
 
@@ -62,7 +62,8 @@ than throwing.
 ## Available API
 
 `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`,
-`Laplace(μ, b)`, `Categorical(p)`, `Cauchy`, `Bernoulli(p)`, and `Binomial(n, p)` each support:
+`Laplace(μ, b)`, `Categorical(p)`, `Cauchy`, `TDist`, `Bernoulli(p)`, and
+`Binomial(n, p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -72,6 +73,14 @@ than throwing.
 
 `Cauchy(μ, σ)` has no finite mean or variance, so `mean`, `var` and `std` return `NaN`.
 `median` and `entropy` are exact.
+
+`TDist(ν, μ, σ)` is Student's t with `ν` degrees of freedom; `TDist(ν)` is the standard
+form. `σ` is a scale rather than a standard deviation, so the variance is
+`σ^2 * ν / (ν - 2)`. Only moments below `ν` exist: `mean` is `NaN` for `ν <= 1`, and
+`var` is `Inf` for `1 < ν <= 2` and `NaN` below that. One degree of freedom is `Cauchy`,
+and a large one approaches `Normal`. Its distribution functions invert the regularized
+incomplete beta, which needs a plain floating-point type, so a draw carries derivatives
+in `μ` and `σ` but not in `ν`.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -117,6 +126,21 @@ MvNormal(μ, σ * I)            # isotropic, σ the common standard deviation
 
 The second argument is always a factor. In the diagonal and isotropic forms, `σ`
 contains standard deviations, not variances.
+
+`MvTDist(ν, μ, L)` is the multivariate t, taking the same three forms of scale factor
+as `MvNormal`. `L * L'` is its scale matrix rather than its covariance: the covariance
+is `ν / (ν - 2) * L * L'` and exists only for `ν > 2`.
+
+```julia
+d = MvTDist(6.0, [1.0, -2.0], Matrix(cholesky(Σ).L))
+
+logdensityof(d, [0.3, -1.0])
+mean(d), cov(d), var(d), std(d), entropy(d)
+rand(d)
+```
+
+It supports the same operations as `MvNormal`. As with `TDist`, sampling inverts an
+incomplete beta, so a draw carries derivatives in `μ` and `L` but not in `ν`.
 
 `Multinomial(n, p)` supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`,
 `std`, `params`, `support`, `insupport`, and `checkparams`. Its samples are count vectors
@@ -204,9 +228,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
-`Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`, `MvNormal`, and
-`Multinomial`. Transformed or composite measures and Distributions.jl interoperability
-are not implemented yet.
+`Uniform`, `Cauchy`, `TDist`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`,
+`MvNormal`, `MvTDist`, and `Multinomial`. Transformed or composite measures and
+Distributions.jl interoperability are not implemented yet.
 
 ## Citation
 

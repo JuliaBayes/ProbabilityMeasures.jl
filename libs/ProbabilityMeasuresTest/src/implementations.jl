@@ -54,6 +54,30 @@ function _invalids(::Cauchy)
 end
 _exactparams(::Cauchy) = Cauchy(0, 2)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} TDist [
+    TDist(5.0, 0.0, 1.0), TDist(8.0, -2.5, 0.5), TDist(6.0f0, 3.0f0, 2.0f0)
+]
+
+function _invalids(::TDist)
+    return (
+        TDist(0.0, 0.0, 1.0),
+        TDist(-1.0, 0.0, 1.0),
+        TDist(NaN, 0.0, 1.0),
+        TDist(5.0, 0.0, -1.0),
+        TDist(5.0, 0.0, 0.0),
+    )
+end
+
+# Use scale 2 so `log(σ)` is not zero during the precision check.
+_exactparams(::TDist) = TDist(5, 0, 2)
+
+#=
+  A draw inverts the CDF, and the incomplete-beta inverse it reaches has no derivative
+  in `ν`. `test-tdist.jl` checks the derivatives in `μ` and `σ`, which the draw does
+  carry.
+=#
+_is_reparameterized(::TDist) = false
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Categorical [
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
 ]
@@ -220,13 +244,13 @@ end
 _exactparams(d::IsoMvNormal) = MvNormal(zeros(Int, length(d.μ)), 2 * I)
 
 # Test fixed distances from the mean.
-function default_testpoints(d::MvNormal)
+function default_testpoints(d::MvLocationScale)
     # Keep every coordinate in the measure's numeric type.
     n, T = length(d.μ), _elscalar(d)
     return [unwhiten(d, [isodd(i) ? T(s) : -T(s) for i in 1:n]) for s in (0.75, 0.0, 2.5)]
 end
 
-function _extremepoints(d::MvNormal)
+function _extremepoints(d::MvLocationScale)
     n = length(d.μ)
     return (
         fill(Inf, n),
@@ -238,3 +262,26 @@ function _extremepoints(d::MvNormal)
         Float64[],
     )
 end
+
+@implements MeasureInterface{MULTIVARIATE_OPTIONALS} MvTDist [
+    MvTDist(6.0, [0.0, 0.0], [1.0 0.0; 0.0 1.0]),
+    MvTDist(8.0, [1.0, -2.0], [2.0 0.0; 0.5 1.5]),
+    MvTDist(6.0f0, Float32[0.0, 1.0], Float32[1.0 0.0; -0.25 0.5]),
+    MvTDist(7.0, [1.0, -2.0], Diagonal([2.0, 1.5])),
+    MvTDist(5.0, [1.0, -2.0], 1.5 * I),
+]
+
+# Reuse the factor-by-factor invalid examples, then add the two invalid `ν`.
+function _invalids(d::MvTDist)
+    T = _elscalar(d)
+    factors = map(m -> MvTDist(d.ν, m.μ, m.L), _invalids(MvNormal(d.μ, d.L)))
+    return (MvTDist(zero(T), d.μ, d.L), MvTDist(-one(T), d.μ, d.L), factors...)
+end
+
+function _exactparams(d::MvTDist)
+    normal = _exactparams(MvNormal(d.μ, d.L))
+    return MvTDist(5, normal.μ, normal.L)
+end
+
+# See `_is_reparameterized(::TDist)`; `test-mvtdist.jl` covers `μ` and `L`.
+_is_reparameterized(::MvTDist) = false
