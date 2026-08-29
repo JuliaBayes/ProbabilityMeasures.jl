@@ -207,7 +207,6 @@ end
         Vector{Float32}
     @test size(rand(Xoshiro(1), d, 3, 4)) == (3, 4)
     @test eltype(rand(Xoshiro(1), d, 5)) === Vector{Float64}
-    @test size(d) == (2,)
 
     # A draw is `μ + L z` for a radially scaled `z`, so the derivative in `μ` is the
     # identity and a factor entry's derivative is its share of the scaled noise.

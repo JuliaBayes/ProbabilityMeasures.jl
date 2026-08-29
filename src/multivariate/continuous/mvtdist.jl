@@ -39,8 +39,6 @@ function Base.eltype(::Type{MvTDist{N,V,F}}) where {N,V,F}
     return Vector{float(promote_type(N, eltype(V), eltype(F)))}
 end
 
-Base.size(d::MvTDist) = (length(d.μ),)
-
 function checkparams(d::MvTDist)
     return isfinite(d.ν) & (d.ν > zero(d.ν)) & checkfactor(d.μ, d.L)
 end
