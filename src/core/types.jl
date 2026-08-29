@@ -41,6 +41,8 @@ Every subtype is normalized: its density integrates or sums to one.
   - `DensityInterface.logdensityof(d, x)`: the normalized log-density.
   - `Base.rand(rng::AbstractRNG, d)`: a single draw.
   - `Base.eltype(::Type{typeof(d)})`: the type of a draw.
+  - `Base.size(d)`: the shape of a draw. Multivariate measures must define this;
+    univariate measures inherit `()`.
   - [`support`](@ref)`(d)`.
 
 [`insupport`](@ref), [`params`](@ref) and the moment functions all have fallbacks.

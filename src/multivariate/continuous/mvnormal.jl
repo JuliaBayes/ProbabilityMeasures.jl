@@ -55,6 +55,8 @@ function Base.eltype(::Type{MvNormal{V,F}}) where {V,F}
     return Vector{float(promote_type(eltype(V), eltype(F)))}
 end
 
+Base.size(d::MvNormal) = (length(d.μ),)
+
 """
     shapesmatch(d::MvNormal, x) -> Bool
 

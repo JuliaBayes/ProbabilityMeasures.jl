@@ -22,6 +22,7 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
                 d -> rand(Xoshiro(1), d) == rand(Xoshiro(1), d),
         ),
         eltype="eltype(d) is concrete" => d -> isconcretetype(eltype(d)),
+        size="size(d) is the shape of a draw" => d -> size(d) == size(testpoint(d)),
         support="support(d) is a Support" => d -> support(d) isa Support,
         insupport="insupport(d, x) is a Bool" => d -> insupport(d, testpoint(d)) isa Bool,
         params=(

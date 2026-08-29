@@ -10,6 +10,16 @@ Return the fields of `d` as a named tuple.
 end
 
 """
+    size(d) -> Tuple
+
+The shape of a single draw from `d`.
+
+Univariate measures return `()`, the shape Julia gives a scalar; multivariate measures
+return `(n,)`, the length of a draw. Every measure satisfies `size(d) == size(rand(d))`.
+"""
+Base.size(::UnivariateMeasure) = ()
+
+"""
     checkparams(d) -> Bool
 
 Return whether `d` has valid parameters.

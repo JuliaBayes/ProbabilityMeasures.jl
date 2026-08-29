@@ -172,6 +172,7 @@ A subtype of `AbstractProbabilityMeasure` must implement:
 - `DensityInterface.logdensityof(d, x)`
 - `Base.rand(rng::AbstractRNG, d)`
 - `Base.eltype(::Type{typeof(d)})`
+- `Base.size(d)` (multivariate measures only; univariate measures inherit `()`)
 - `support(d)`
 
 Implementations must also keep `logdensityof` total, avoid constructor validation,

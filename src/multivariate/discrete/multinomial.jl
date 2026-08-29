@@ -29,6 +29,8 @@ function Base.eltype(::Type{Multinomial{N,V}}) where {N,V}
     return Vector{float(eltype(V))}
 end
 
+Base.size(d::Multinomial) = (length(d.p),)
+
 checkparams(d::Multinomial) = (d.n >= zero(d.n)) & checkparams(Categorical(d.p))
 
 support(d::Multinomial) = IntegerSimplex(d.n, length(d.p))
