@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Uniform`, `Laplace`, `Cauchy`,  `Categorical`, `Bernoulli`, `Binomial`, `MvNormal`,
-and `Multinomial`.
+`Exponential`, `Uniform`, `Laplace`, `Cauchy`, `Gamma`, `Categorical`, `Bernoulli`,
+`Binomial`, `Poisson`, `MvNormal`, and `Multinomial`.
 
 ## Installation
 
@@ -62,7 +62,8 @@ than throwing.
 ## Available API
 
 `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`,
-`Laplace(μ, b)`, `Categorical(p)`, `Cauchy`, `Bernoulli(p)`, and `Binomial(n, p)` each support:
+`Laplace(μ, b)`, `Cauchy(μ, σ)`, `Gamma(α, θ)`, `Categorical(p)`, `Bernoulli(p)`,
+`Binomial(n, p)`, and `Poisson(λ)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -72,6 +73,14 @@ than throwing.
 
 `Cauchy(μ, σ)` has no finite mean or variance, so `mean`, `var` and `std` return `NaN`.
 `median` and `entropy` are exact.
+
+`Gamma(α, θ)` takes a shape and a scale, so its mean is `α * θ`, and `Gamma(α)` sets the
+scale to one. Its density is closed form, but its distribution functions are not: `cdf`,
+`ccdf`, `logcdf`, `logccdf`, `quantile`, `median` and `entropy` sum a series or iterate
+until the terms stop changing the result. They work in the type they are given, so
+`BigFloat` keeps its precision, but they cannot run in traced or device-side code.
+Sampling has no such limit: it uses rejection, and the accept step runs on plain
+floating-point noise, which leaves the draw differentiable with respect to `α` and `θ`.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -204,9 +213,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
-`Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`, `MvNormal`, and
-`Multinomial`. Transformed or composite measures and Distributions.jl interoperability
-are not implemented yet.
+`Uniform`, `Cauchy`, `Laplace`, `Gamma`, `Categorical`, `Bernoulli`, `Binomial`,
+`Poisson`, `MvNormal`, and `Multinomial`. Transformed or composite measures and
+Distributions.jl interoperability are not implemented yet.
 
 ## Citation
 

@@ -15,12 +15,13 @@ using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
-using SpecialFunctions: erfc, erfcinv, gamma_inc, logerfc, loggamma
+using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 
 include("core/types.jl")
 include("core/mathfuns.jl")
+include("core/gammainc.jl")
 include("core/support.jl")
 include("core/interface.jl")
 
@@ -30,6 +31,7 @@ include("univariate/continuous/exponential.jl")
 include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
 include("univariate/continuous/cauchy.jl")
+include("univariate/continuous/gamma.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
@@ -61,7 +63,7 @@ export Support,
 export support, insupport
 
 # Interface
-export checkparams, validateparams, noisetype, basefloat
+export checkparams, validateparams, noisetype, basefloat, basevalue
 export cdf, ccdf, logcdf, logccdf, entropy
 
 # Re-export common operations from package dependencies.
@@ -76,6 +78,7 @@ export Exponential
 export Uniform
 export Laplace
 export Cauchy
+export Gamma
 export Categorical
 export Bernoulli
 export Binomial
