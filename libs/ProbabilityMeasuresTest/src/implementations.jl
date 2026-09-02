@@ -70,6 +70,17 @@ function _invalids(::Cauchy)
 end
 _exactparams(::Cauchy) = Cauchy(0, 2)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Gamma [
+    Gamma(2.0, 1.0), Gamma(0.5, 3.0), Gamma(4.5f0, 0.5f0)
+]
+
+function _invalids(::Gamma)
+    return (Gamma(-1.0, 1.0), Gamma(0.0, 1.0), Gamma(1.0, -1.0), Gamma(Inf, 1.0))
+end
+
+# Use a shape and a scale that leave `loggamma(α)` and `log(θ)` non-zero.
+_exactparams(::Gamma) = Gamma(3, 2)
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Categorical [
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
 ]
