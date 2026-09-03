@@ -36,9 +36,9 @@ checkparams(d::Exponential) = isfinite(d.θ) & (d.θ > zero(d.θ))
 support(::Exponential) = NonNegativeReals()
 
 """
-    sval(d::Exponential, x)
+    sval(d, x)
 
-Return the scaled value ``x/\\theta``.
+Return the scaled value ``x/\\theta`` for a scale-parameterized measure.
 """
 @inline sval(d::Exponential, x::Number) = x / d.θ
 

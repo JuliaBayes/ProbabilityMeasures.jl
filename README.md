@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`, `Bernoulli`, `Binomial`,
-`Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
+`Exponential`, `Weibull`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`, `Bernoulli`,
+`Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
 
 ## Installation
 
@@ -61,7 +61,7 @@ than throwing.
 
 ## Available API
 
-`Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`,
+`Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Weibull(α, θ)`, `Uniform(a, b)`,
 `Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`, `Bernoulli(p)`, `Binomial(n, p)`,
 `Poisson(λ)`, and `Geometric(p)` each support:
 
@@ -206,9 +206,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
-`Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`, `Poisson`,
-`Geometric`, `MvNormal`, and `Multinomial`. Transformed or composite measures and
-Distributions.jl interoperability are not implemented yet.
+`Weibull`, `Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`,
+`Poisson`, `Geometric`, `MvNormal`, and `Multinomial`. Transformed or composite measures
+and Distributions.jl interoperability are not implemented yet.
 
 ## Citation
 

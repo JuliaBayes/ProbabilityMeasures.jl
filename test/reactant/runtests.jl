@@ -18,6 +18,9 @@ using Test
         Uniform(-1.0, 2.0),
         Cauchy(-1.0, 2.0),
         Geometric(0.3),
+        # Both shape regimes: the log-density branches change at `α = 1`.
+        Weibull(1.5, 2.0),
+        Weibull(0.75, 2.5),
     )
         test_reactant(d, default_testpoints(d))
     end
@@ -47,5 +50,13 @@ using Test
         grad = p -> Enzyme.gradient(Enzyme.Reverse, loss, p)
         got = @jit grad(Reactant.ConcreteRNumber(0.5))
         @test Float64(got[1]) ≈ -4.0 rtol = 1e-10
+
+        loss = (a, s) -> logdensityof(Weibull(a, s), 1.0)
+        grad = (a, s) -> Enzyme.gradient(Enzyme.Reverse, loss, a, s)
+        got = @jit grad(Reactant.ConcreteRNumber(1.5), Reactant.ConcreteRNumber(2.0))
+        # At `z = x/θ`: `∂α = 1/α + (1 - z^α) log z` and `∂θ = (α/θ)(z^α - 1)`.
+        z = 0.5
+        expected = [1 / 1.5 + (1 - z^1.5) * log(z), 0.75 * (z^1.5 - 1)]
+        @test [Float64(got[1]), Float64(got[2])] ≈ expected rtol = 1e-10
     end
 end
