@@ -75,12 +75,13 @@ than throwing.
 `median` and `entropy` are exact.
 
 `Gamma(α, θ)` takes a shape and a scale, so its mean is `α * θ`, and `Gamma(α)` sets the
-scale to one. Its density is closed form, but its distribution functions are not: `cdf`,
-`ccdf`, `logcdf`, `logccdf`, `quantile`, `median` and `entropy` sum a series or iterate
-until the terms stop changing the result. They work in the type they are given, so
-`BigFloat` keeps its precision, but they cannot run in traced or device-side code.
-Sampling has no such limit: it uses rejection, and the accept step runs on plain
-floating-point noise, which leaves the draw differentiable with respect to `α` and `θ`.
+scale to one. Its density is closed form, but `cdf`, `ccdf`, `logcdf`, `logccdf`,
+`quantile`, `median` and `entropy` are not: they iterate until the terms stop changing
+the result, so they keep `BigFloat` precision but cannot run in traced or device-side
+code. Sampling uses rejection with the accept step on plain floating-point noise, so
+derivatives with respect to `α` and `θ` flow through the accepted draw. Because the
+acceptance itself depends on `α`, that derivative is an approximation of the
+reparameterization gradient, not the exact one the other samplers give.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -169,7 +170,8 @@ Scalar sampling is reparameterized: noise is drawn in the underlying floating-po
 type and the measure parameters enter through arithmetic. This allows derivatives with
 respect to the parameters without custom derivative rules. Categorical draws do not
 have a pathwise derivative, but their log-density is differentiable with respect to
-the probabilities.
+the probabilities. `Gamma` draws by rejection, and its derivative holds the accepted
+noise fixed, so it is approximate.
 
 `Categorical` accepts any `AbstractVector`. Use an `isbits` vector type, such as
 `StaticArrays.SVector`, when the complete measure must be `isbits`.

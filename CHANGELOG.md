@@ -63,26 +63,25 @@ and this project adheres to [Semantic Versioning].
   direct `logccdf` stays accurate in the upper tail, and the density at zero follows
   the shape: infinite below `α = 1`, `1/θ` at it, zero above. A sample is a
   transformed unit-exponential draw, differentiable in the parameters.
-- `Gamma(α, θ)`, taking a shape and a scale so that the mean is `α * θ`. Its density is
-  closed form, but its distribution functions are not: `cdf`, `ccdf`, `logcdf`,
-  `logccdf`, `quantile`, `median` and `entropy` sum a series, run a continued fraction,
-  or iterate Newton's method until the terms stop changing the result. They work in the
-  type they are given rather than dropping to `Float64`, so `BigFloat` keeps its
-  precision, and the price is that they cannot run in traced or device-side code.
+- `Gamma(α, θ)`, with a shape and a scale so that the mean is `α * θ`. Its density is
+  closed form; `cdf`, `ccdf`, `logcdf`, `logccdf`, `quantile`, `median` and `entropy` are
+  not, and sum a series, run a continued fraction, or iterate Newton's method until the
+  terms stop changing the result. They work in the type they are given, so `BigFloat`
+  keeps its precision, at the price of not running in traced or device-side code.
+  Sampling uses Marsaglia and Tsang's rejection method, the first sampler in the package
+  that does not invert a CDF. Its accept step runs on plain noise and the accepted noise
+  enters the draw through arithmetic on the parameters, so automatic differentiation
+  follows them. That derivative holds the acceptance fixed, so it approximates the
+  reparameterization gradient rather than matching it.
 - `loggammap(a, x)` and `loggammaq(a, x)`, the regularized incomplete gamma integrals in
-  log space. Returning logarithms is what keeps `Gamma`'s `logcdf` and `logccdf` finite
-  where the probabilities themselves underflow, and it costs nothing: each tail is
-  already computed from a logarithmic prefactor. Relative accuracy sits at the rounding
-  error of the argument type for shapes up to about `1000`, then falls off roughly in
-  proportion to the shape, since the prefactor's terms grow while their sum does not:
-  measured against `SpecialFunctions.gamma_inc` it is `5e-13` at shape `1000` and `2e-10`
-  at shape `10^5`.
+  log space, which keep `Gamma`'s `logcdf` and `logccdf` finite where the probabilities
+  underflow. Relative accuracy sits at the rounding error of the argument type for shapes
+  up to about `1000` and then falls off roughly in proportion to the shape: against
+  `SpecialFunctions.gamma_inc` it is `5e-13` at shape `1000` and `2e-10` at shape `10^5`.
 - `basevalue(x)`, the plain floating-point value inside a wrapped number, with methods in
-  the ForwardDiff and ReverseDiff extensions and an Enzyme inactivity rule. `Gamma` is
-  the first measure whose sampler rejects, and its accept step reads `basevalue(α)`. The
-  loop therefore runs on plain numbers whatever type the parameters carry, and the
-  accepted noise enters the draw through arithmetic on `α` and `θ`, which is what leaves
-  the draw differentiable with respect to both.
+  the ForwardDiff and ReverseDiff extensions and an Enzyme inactivity rule. `Gamma`'s
+  accept step reads it, so the rejection loop runs on plain numbers whatever type the
+  parameters carry.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`

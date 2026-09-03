@@ -34,6 +34,7 @@ end
     # The one-argument form sets the scale to one in the shape's own type.
     @test Gamma(2) === Gamma(2, 1)
     @test Gamma(2.0f0) === Gamma(2.0f0, 1.0f0)
+    @test Gamma() === Gamma(1.0, 1.0)
 
     @test eltype(Gamma(2, 1)) === Float64
     @test eltype(Gamma(2.0f0, 1.0f0)) === Float32
@@ -81,30 +82,35 @@ end
 
 @testset "support" begin
     d = Gamma(2.0, 3.0)
-    @test support(d) === PositiveReals()
+    @test support(d) === NonNegativeReals()
     @test minimum(support(d)) === 0.0
     @test maximum(support(d)) === Inf
 
+    @test insupport(d, 0.0)
     @test insupport(d, 1e-300)
     @test insupport(d, 1e300)
-    @test !insupport(d, 0.0)
     @test !insupport(d, -1.0)
     @test !insupport(d, Inf)
     @test !insupport(d, NaN)
 end
 
+@testset "density at zero follows the shape" begin
+    @test logdensityof(Gamma(0.5, 2.0), 0.0) == Inf
+    @test logdensityof(Gamma(1.0, 2.0), 0.0) == -log(2.0)
+    @test logdensityof(Gamma(1, 2), 0.0) == -log(2.0)
+    @test logdensityof(Gamma(2.0, 2.0), 0.0) == -Inf
+end
+
 @testset "density is total off the support" begin
-    # A shape below one has an infinite density at zero, one above it a zero density.
     for d in (Gamma(0.5, 1.0), Gamma(1.0, 1.0), Gamma(2.0, 1.0))
-        for x in (0.0, -1.0, -Inf, NaN, -floatmax(Float64))
+        for x in (-1.0, -Inf, Inf, NaN, -floatmax(Float64))
             @test logdensityof(d, x) == -Inf
         end
-        @test !isfinite(logdensityof(d, Inf))
     end
 end
 
 @testset "a unit shape is the exponential measure" begin
-    for θ in (0.4, 1.0, 3.0), x in (0.2, 1.7, 8.0)
+    for θ in (0.4, 1.0, 3.0), x in (0.0, 0.2, 1.7, 8.0)
         @test logdensityof(Gamma(1.0, θ), x) ≈ logdensityof(Exponential(θ), x)
         @test cdf(Gamma(1.0, θ), x) ≈ cdf(Exponential(θ), x)
         @test logccdf(Gamma(1.0, θ), x) ≈ logccdf(Exponential(θ), x)
@@ -211,6 +217,9 @@ end
     d = Gamma(2.0, 1.5)
     @test rand(Xoshiro(1), d) isa Float64
     @test rand(Xoshiro(1), Gamma(2.0f0, 1.5f0)) isa Float32
+    # Mixed parameter types must still draw `eltype(d)`.
+    @test rand(Xoshiro(1), Gamma(2, 1.5f0)) isa Float32
+    @test rand(Xoshiro(1), Gamma(0.5f0, 2)) isa Float32
     @test size(rand(Xoshiro(1), d, 3, 4)) == (3, 4)
     @test eltype(rand(Xoshiro(1), d, 5)) === Float64
 
@@ -226,11 +235,16 @@ end
         @test mean(draws) ≈ mean(m) atol = 5 * std(m) / sqrt(200_000)
         @test var(draws) ≈ var(m) rtol = 0.05
     end
+
+    # The rejection loop must not run forever or throw on invalid parameters.
+    for bad in (Gamma(NaN, 1.0), Gamma(-1.0, 1.0), Gamma(0.0, 1.0), Gamma(2.0, -1.0))
+        @test isnan(rand(Xoshiro(1), bad))
+    end
 end
 
 @testset "sample derivative follows the parameters" begin
-    # The accept step runs on plain noise, so the draw is a smooth function of both
-    # parameters at fixed noise. Compare with a central difference.
+    # The accept step runs on plain noise, so at fixed noise the draw is a smooth
+    # function of both parameters. Compare with a central difference at the same seed.
     for α in (0.4, 2.0, 9.0), θ in (0.5, 2.0)
         draw(p) = rand(Xoshiro(7), Gamma(p[1], p[2]))
         g = ForwardDiff.gradient(draw, [α, θ])

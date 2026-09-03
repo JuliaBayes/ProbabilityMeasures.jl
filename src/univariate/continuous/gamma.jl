@@ -1,15 +1,20 @@
 """
     Gamma(α, θ)
     Gamma(α)
+    Gamma()
 
-The gamma measure on ``(0, \\infty)`` with shape `α` and scale `θ`. Its density is
+The gamma measure on ``[0, \\infty)`` with shape `α` and scale `θ`. Its density is
 
 ```math
 p(x) = \\frac{x^{\\alpha - 1} e^{-x/\\theta}}{\\Gamma(\\alpha)\\, \\theta^{\\alpha}}
 ```
 
-The mean is ``\\alpha\\theta``, matching Distributions.jl. `Gamma(α)` sets the scale to
-one. `Gamma(1, θ)` is `Exponential(θ)`.
+The parameterization matches Distributions.jl, so the mean is ``\\alpha\\theta``.
+`Gamma(1, θ)` is `Exponential(θ)`, and the density at zero follows the shape: infinite
+for `α < 1`, `1/θ` at `α = 1`, and zero above.
+
+`Gamma(α)` sets the scale to one in the type of `α`. `Gamma()` creates the unit-shape,
+unit-scale measure using `Float64` values.
 
 # Arguments
 
@@ -24,15 +29,18 @@ checkparams(Gamma(-1.0, 1.0))               # false
 isnan(logdensityof(Gamma(-1.0, 1.0), 1.0))  # true
 ```
 
-`logdensityof` is closed form, so it broadcasts on device arrays and traces. `cdf`,
-`ccdf`, `logcdf`, `logccdf`, `quantile`, `median` and `entropy` have no closed form and
-iterate until their terms stop changing the result, which rules out traced and
-device-side evaluation; see [`loggammap`](@ref).
+# Cost
+
+`logdensityof` is closed form. `cdf`, `ccdf`, `logcdf`, `logccdf`, `quantile`, `median`
+and `entropy` are not: they sum a series, run a continued fraction, or iterate Newton's
+method until the terms stop changing the result, which rules out traced and
+device-side evaluation. See [`loggammap`](@ref).
 
 Sampling uses Marsaglia and Tsang's rejection method. The accept step runs on plain
-floating-point noise, so it costs the same whatever numeric type the parameters carry,
-and the accepted noise enters the draw through arithmetic on `α` and `θ`, leaving the
-draw differentiable with respect to both.
+floating-point noise, and the accepted noise enters the draw through arithmetic on `α`
+and `θ`, so automatic differentiation follows both parameters. That derivative holds
+the accepted noise fixed while the acceptance itself depends on `α`, so it is an
+approximation, not the exact reparameterization gradient the inverse-CDF samplers give.
 """
 struct Gamma{A<:Number,T<:Number} <: ContinuousUnivariateMeasure
     α::A
@@ -40,14 +48,15 @@ struct Gamma{A<:Number,T<:Number} <: ContinuousUnivariateMeasure
 end
 
 Gamma(α::Number) = Gamma(α, one(α))
+Gamma() = Gamma(1.0, 1.0)
 
 Base.eltype(::Type{Gamma{A,T}}) where {A,T} = float(promote_type(A, T))
 
 function checkparams(d::Gamma)
-    return isfinite(d.α) & (d.α > zero(d.α)) & isfinite(d.θ) & (d.θ > zero(d.θ))
+    return isfinite(d.α) & isfinite(d.θ) & (d.α > zero(d.α)) & (d.θ > zero(d.θ))
 end
 
-support(::Gamma) = PositiveReals()
+support(::Gamma) = NonNegativeReals()
 
 """
     valuetype(d::Gamma, x)
@@ -66,9 +75,14 @@ end
     α, θ, y = convert(T, d.α), convert(T, d.θ), convert(T, x)
     # `loggamma` throws for a non-positive argument, so an invalid shape takes `NaN`.
     lg = select(α > zero(T), () -> loggamma(α), () -> convert(T, NaN))
-    v = muladd(α - one(T), logt(y), -(y / θ)) - lg - α * logt(θ)
-    # Convert exact values to a float before returning `-Inf`.
-    return select(insupport(d, y), () -> v, () -> convert(T, -Inf))
+    value = muladd(α - one(T), logt(y), -(y / θ)) - lg - α * logt(θ)
+    # At `x = 0` the formula settles every shape but `α = 1`, where `0 * log(0)` is `NaN`.
+    atzero = select(α == one(T), () -> -logt(θ), () -> value)
+    return select(
+        insupport(d, y) & (y > zero(T)),
+        () -> value,
+        () -> select(y == zero(T), () -> atzero, () -> convert(T, -Inf)),
+    )
 end
 
 """
@@ -77,6 +91,7 @@ end
 The standard normal draw that Marsaglia and Tsang's method accepts for shape `a >= 1`.
 
 ``(a - 1/3)(1 + z/\\sqrt{9a - 3})^3`` is then a draw from the unit-scale gamma measure.
+The loop does not terminate for a non-finite `a`, so callers must check the shape.
 """
 function gammanoise(rng::AbstractRNG, a::F) where {F<:AbstractFloat}
     c = a - one(F) / 3
@@ -102,26 +117,33 @@ end
 =#
 @inline function Base.rand(rng::AbstractRNG, d::Gamma)
     F = noisetype(d)
-    boost = basevalue(d.α) < one(F)
-    α = boost ? d.α + one(d.α) : d.α
-    z = gammanoise(rng, convert(F, basevalue(α)))
-    # Apply the parameters after drawing noise so automatic differentiation can follow
-    # them. This must repeat `gammanoise`'s arithmetic to land on the accepted draw.
-    c = α - one(α) / 3
-    x = d.θ * c * muladd(inv(sqrt(9 * c)), z, one(c))^3
-    return boost ? x * rand(rng, F)^inv(d.α) : x
+    # Promote first so mixed parameter types give a draw of `eltype(d)`.
+    α, θ = promote(d.α, d.θ)
+    boost = basevalue(α) < one(F)
+    a = boost ? α + one(α) : α
+    # Invalid parameters would loop forever, so they take `NaN` instead.
+    z = checkparams(d) ? gammanoise(rng, convert(F, basevalue(a))) : convert(F, NaN)
+    #=
+      Apply the parameters after drawing noise so automatic differentiation can follow
+      them. This must repeat `gammanoise`'s arithmetic to land on the accepted draw. The
+      `abs` keeps the square root from a domain error for an invalid shape, where `z` is
+      already `NaN`.
+    =#
+    c = a - one(a) / 3
+    x = θ * c * muladd(inv(sqrt(9 * abs(c))), z, one(c))^3
+    return boost ? x * rand(rng, F)^inv(α) : x
 end
 
 Statistics.mean(d::Gamma) = d.α * d.θ
 Statistics.var(d::Gamma) = d.α * d.θ^2
 
 function entropy(d::Gamma)
-    α = float(d.α)
+    α, θ = map(float, promote(d.α, d.θ))
     # `loggamma` and `digamma` throw for a non-positive argument.
     shape = select(
         α > zero(α), () -> loggamma(α) + (one(α) - α) * digamma(α), () -> oftype(α, NaN)
     )
-    return α + logt(float(d.θ)) + shape
+    return α + logt(θ) + shape
 end
 
 #=

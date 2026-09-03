@@ -73,9 +73,8 @@ basefloat(::Type{<:Irrational}) = Float64
 The plain floating-point value inside `x`.
 
 A rejection sampler compares against it so that its accept step runs on plain numbers
-and stays independent of the wrapped numeric types automatic differentiation and
-tracing systems substitute. The accepted noise then enters the draw through arithmetic
-on the parameters, which is what makes the draw differentiable. Package extensions add
-methods for wrapped types.
+whatever wrapped type automatic differentiation or tracing has substituted. The accepted
+noise then enters the draw through arithmetic on the parameters, which automatic
+differentiation can follow. Package extensions add methods for wrapped types.
 """
 basevalue(x::Number) = float(x)
