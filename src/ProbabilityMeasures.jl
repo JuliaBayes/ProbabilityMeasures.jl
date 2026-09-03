@@ -35,6 +35,7 @@ include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
 include("univariate/discrete/binomial.jl")
 include("univariate/discrete/poisson.jl")
+include("univariate/discrete/geometric.jl")
 
 include("multivariate/continuous/mvnormal.jl")
 include("multivariate/discrete/multinomial.jl")
@@ -80,6 +81,7 @@ export Categorical
 export Bernoulli
 export Binomial
 export Poisson
+export Geometric
 export MvNormal
 export Multinomial
 

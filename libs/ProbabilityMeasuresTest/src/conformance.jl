@@ -376,14 +376,19 @@ end
 _widen(x) = convert(promote_type(typeof(float(x)), Float64), x)
 
 function test_cdf(d, xs)
+    #=
+      Relative error is not useful when a log probability is near zero, and taking the
+      log of a probability that has rounded near one loses absolute accuracy in step
+      with the element type. An exact `logcdf` is the more accurate of the two.
+    =#
+    logtol = max(1e-12, 8 * eps(float(_elscalar(d))))
     for x in xs
         c = cdf(d, x)
         @test 0 <= c <= 1
         @test cdf(d, x) + ccdf(d, x) ≈ 1
         @test quantile(d, c) ≈ x rtol = 1e-6
-        # Relative error is not useful when a log probability is near zero.
-        @test logcdf(d, x) ≈ log(c) rtol = 1e-8 atol = 1e-12
-        @test logccdf(d, x) ≈ log(ccdf(d, x)) rtol = 1e-8 atol = 1e-12
+        @test logcdf(d, x) ≈ log(c) rtol = 1e-8 atol = logtol
+        @test logccdf(d, x) ≈ log(ccdf(d, x)) rtol = 1e-8 atol = logtol
     end
 
     # A log-CDF should stay finite after the CDF underflows. Skip bounded measures when

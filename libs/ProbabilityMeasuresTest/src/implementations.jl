@@ -114,6 +114,30 @@ _invalids(::Poisson) = (Poisson(-Inf), Poisson(Inf), Poisson(NaN))
 # Exercise the `k * log(λ)` term.
 _exactparams(::Poisson) = Poisson(2)
 
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} Geometric [
+    Geometric(0.3), Geometric(0.5), Geometric(0.6f0)
+]
+
+#=
+  These must be non-finite at every test point, zero included. A probability above one
+  stays finite there, so `test-geometric.jl` covers it separately.
+=#
+_invalids(::Geometric) = (Geometric(0.0), Geometric(-0.5), Geometric(Inf), Geometric(NaN))
+
+# Zero and one give an infinite log-density, so use an exact rational instead.
+_exactparams(::Geometric) = Geometric(1//2)
+
+#=
+  Several conformance checks use only the first point, and the `k * log(1 - p)` term
+  drops out at zero, so lead with a nonzero outcome. Keep zero as well: it is the one
+  point where that term is skipped.
+=#
+function default_testpoints(d::Geometric)
+    T = _elscalar(d)
+    ps = (T(1) / 4, T(1) / 2, T(3) / 4, T(95) / 100)
+    return unique([one(T); [quantile(d, p) for p in ps]])
+end
+
 @implements MeasureInterface{(:meanvector, :cov)} Multinomial [
     Multinomial(5, [0.2, 0.3, 0.5]),
     Multinomial(4, Float32[0.25, 0.25, 0.5]),
