@@ -21,6 +21,19 @@ Like `log`, but returns `NaN` instead of throwing for a negative input.
 end
 
 """
+    sqrtt(x)
+
+Like `sqrt`, but returns `NaN` instead of throwing for a negative input.
+
+A Cholesky factorization takes the square root of a pivot, so this version is what lets
+it report an indefinite matrix as a non-finite factor rather than an error.
+"""
+@inline function sqrtt(x::Number)
+    # Some tools evaluate both choices, so call `sqrt` only with a valid value.
+    return select(x < zero(x), () -> oftype(float(x), NaN), () -> sqrt(x))
+end
+
+"""
     erfcinvt(y)
 
 Like `erfcinv`, but returns `NaN` instead of throwing outside its domain.

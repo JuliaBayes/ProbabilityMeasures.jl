@@ -121,3 +121,22 @@ end
 function insupport(s::RealVectors, x::AbstractVector{<:Number})
     return (length(x) == s.n) & all(isfinite, x)
 end
+
+"""
+    PositiveDefiniteMatrices(n)
+
+The symmetric positive-definite `n`-by-`n` real matrices.
+
+Symmetry is exact rather than approximate, so a matrix assembled as a product has to be
+symmetrized before it lands here.
+"""
+struct PositiveDefiniteMatrices <: Support
+    n::Int
+end
+
+function insupport(s::PositiveDefiniteMatrices, x::AbstractMatrix{<:Number})
+    (size(x) == (s.n, s.n)) && all(isfinite, x) && issymmetric(x) || return false
+    # Every pivot of the Cholesky factor is positive exactly when `x` is definite.
+    C = cholfactor(x)
+    return all(i -> isfinite(C[i, i]) & (C[i, i] > zero(C[i, i])), 1:(s.n))
+end

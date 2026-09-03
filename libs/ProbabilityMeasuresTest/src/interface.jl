@@ -64,6 +64,18 @@ testpoint(d, i::Int=1) = rand(Xoshiro(i), d)
                 d -> var(d) ≈ [cov(d)[i, i] for i in axes(cov(d), 1)],
             "std is the elementwise square root of var" => d -> std(d) ≈ sqrt.(var(d)),
         ),
+        # Matrix-variate summaries. `mean` and `var` take the shape of a draw, while
+        # `cov` covers the pairs of its entries and so is indexed as `vec` orders them.
+        matrixsummaries=(
+            "mean is a matrix with the shape of a draw" =>
+                d -> (mean(d) isa AbstractMatrix) && size(mean(d)) == size(testpoint(d)),
+            "cov is square, with the length of a draw" =>
+                d -> size(cov(d)) == (length(testpoint(d)), length(testpoint(d))),
+            "cov is symmetric" => d -> cov(d) ≈ transpose(cov(d)),
+            "var is the diagonal of cov, in the shape of a draw" =>
+                d -> vec(var(d)) ≈ [cov(d)[i, i] for i in axes(cov(d), 1)],
+            "std is the elementwise square root of var" => d -> std(d) ≈ sqrt.(var(d)),
+        ),
     ),
 ) """
 Checks the required measure methods and any declared distribution functions or

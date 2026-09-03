@@ -81,14 +81,7 @@ end
 Return ``\\log \\det L`` in `float(T)`. A non-positive diagonal entry gives a
 non-finite result instead of an error.
 """
-function logdetfactor(d::MvNormal, ::Type{T}) where {T}
-    R = float(T)
-    acc = zero(R)
-    for i in 1:length(d.μ)
-        acc += logt(convert(R, d.L[i, i]))
-    end
-    return acc
-end
+logdetfactor(d::MvNormal, ::Type{T}) where {T} = logdetdiag(d.L, length(d.μ), T)
 
 function logdetfactor(d::DiagMvNormal, ::Type{T}) where {T}
     R = float(T)
@@ -134,20 +127,6 @@ function checkparams(d::IsoMvNormal)
 end
 
 support(d::MvNormal) = RealVectors(length(d.μ))
-
-"""
-    rowdot(L, v, i, k)
-
-The inner product of the first `k` entries of row `i` of `L` and `v`.
-"""
-@inline function rowdot(L::AbstractMatrix, v::AbstractVector, i::Integer, k::Integer)
-    # Zero times infinity is `NaN`, which must remain visible in the result.
-    acc = L[i, 1] * v[1]
-    for j in 2:k
-        acc = muladd(L[i, j], v[j], acc)
-    end
-    return acc
-end
 
 """
     whiten(d::MvNormal, x)

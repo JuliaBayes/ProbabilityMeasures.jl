@@ -75,6 +75,21 @@ and this project adheres to [Semantic Versioning].
   loop therefore runs on plain numbers whatever type the parameters carry, and the
   accepted noise enters the draw through arithmetic on `α` and `θ`, which is what leaves
   the draw differentiable with respect to both.
+- `Wishart(ν, L)`, the first matrix-variate measure, with the `Matrixvariate` variate
+  form and the `ContinuousMatrixvariateMeasure` alias it dispatches on, and the
+  `PositiveDefiniteMatrices` support. `L` is the lower-triangular factor of the scale
+  matrix, the same convention `MvNormal` uses, which keeps ``\log|S|`` a sum over a
+  diagonal and the trace term a triangular solve rather than an inversion. `mean`, `var`
+  and `std` take the shape of a draw; `cov` covers every pair of entries and so is
+  indexed the way `vec` orders them. Sampling uses Bartlett's decomposition, one
+  chi-squared draw per dimension, and so inherits `Gamma`'s sampler and its derivative
+  with respect to the parameters. Draws are symmetrized, so they land exactly in the
+  support rather than a rounding error away from it.
+- `cholfactor`, `forwardsolve`, `rowsdot` and `logdetdiag` in `src/core/linalg.jl`, with
+  `rowdot` moved there from `MvNormal`. Each builds new arrays instead of writing into
+  one, so reverse-mode backends, which reject array mutation, can follow them, and
+  `cholfactor` takes its pivots through `sqrtt`, so an indefinite argument gives a
+  non-finite factor rather than a `DomainError`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
@@ -103,8 +118,11 @@ and this project adheres to [Semantic Versioning].
 - `MvNormal`'s `logdensityof` allocates, unlike the univariate measures'. Whitening
   needs a temporary, grown by `vcat` so that reverse-mode backends, which reject array
   mutation, can differentiate it.
+- The conformance suite gained a `matrixsummaries` optional group for measures whose
+  draws are matrices. `mean` and `var` take the shape of a draw there, so the vector
+  form's check that `var` is the diagonal of `cov` needs a reshape.
 - The exported surface is intentionally minimal: every name is one a PPL is
-  expected to call. `mode`, `skewness`, `kurtosis`, `mgf`, `cf`, `Matrixvariate`,
+  expected to call. `mode`, `skewness`, `kurtosis`, `mgf`, `cf`,
   `variateform`/`valuesupport`, and the unused supports are omitted rather than
   shipped speculatively, since adding an export later is non-breaking and removing
   one is not.

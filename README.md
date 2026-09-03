@@ -12,7 +12,7 @@ broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
 `Exponential`, `Uniform`, `Laplace`, `Cauchy`, `Gamma`, `Categorical`, `Bernoulli`,
-`Binomial`, `Poisson`, `MvNormal`, and `Multinomial`.
+`Binomial`, `Poisson`, `MvNormal`, `Multinomial`, and `Wishart`.
 
 ## Installation
 
@@ -132,6 +132,27 @@ contains standard deviations, not variances.
 in `IntegerSimplex(n, length(p))`, and `var` and `std` return marginal values. As with
 `MvNormal`, multivariate `cdf`, `quantile`, and `median` are not provided.
 
+`Wishart(ν, L)` draws symmetric positive-definite matrices. Like `MvNormal`, its second
+argument is a lower-triangular factor, so the scale matrix is `L * L'` and the mean is
+`ν * L * L'`. `ν` must exceed `size(L, 1) - 1`.
+
+```julia
+using LinearAlgebra, ProbabilityMeasures
+
+S = [4.0 1.0; 1.0 2.5]
+d = Wishart(5.0, Matrix(cholesky(S).L))
+
+logdensityof(d, [6.0 1.0; 1.0 4.0])
+mean(d), var(d), std(d), entropy(d)
+rand(d)
+```
+
+It supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`, `std`, `entropy`,
+`params`, `support`, `insupport`, and `checkparams`. `mean`, `var` and `std` take the
+shape of a draw; `cov` covers every pair of entries and so is a `length(X)`-by-`length(X)`
+matrix indexed the way `vec` orders them. Only the lower triangles of `L` and of the
+argument are read.
+
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
 
@@ -214,7 +235,7 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
 `Uniform`, `Cauchy`, `Laplace`, `Gamma`, `Categorical`, `Bernoulli`, `Binomial`,
-`Poisson`, `MvNormal`, and `Multinomial`. Transformed or composite measures and
+`Poisson`, `MvNormal`, `Multinomial`, and `Wishart`. Transformed or composite measures and
 Distributions.jl interoperability are not implemented yet.
 
 ## Citation

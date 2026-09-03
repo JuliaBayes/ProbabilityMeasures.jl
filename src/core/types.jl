@@ -1,7 +1,8 @@
 """
     VariateForm
 
-Describes the shape of one sample: [`Univariate`](@ref) or [`Multivariate`](@ref).
+Describes the shape of one sample: [`Univariate`](@ref), [`Multivariate`](@ref), or
+[`Matrixvariate`](@ref).
 """
 abstract type VariateForm end
 
@@ -10,6 +11,9 @@ struct Univariate <: VariateForm end
 
 "Draws are vectors."
 struct Multivariate <: VariateForm end
+
+"Draws are matrices."
+struct Matrixvariate <: VariateForm end
 
 """
     ValueSupport
@@ -67,12 +71,14 @@ abstract type AbstractProbabilityMeasure{F<:VariateForm,S<:ValueSupport} end
 # Short names used by implementations and interface fallbacks.
 const UnivariateMeasure{S} = AbstractProbabilityMeasure{Univariate,S}
 const MultivariateMeasure{S} = AbstractProbabilityMeasure{Multivariate,S}
+const MatrixvariateMeasure{S} = AbstractProbabilityMeasure{Matrixvariate,S}
 const ContinuousMeasure{F} = AbstractProbabilityMeasure{F,Continuous}
 const DiscreteMeasure{F} = AbstractProbabilityMeasure{F,Discrete}
 const ContinuousUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Continuous}
 const DiscreteUnivariateMeasure = AbstractProbabilityMeasure{Univariate,Discrete}
 const ContinuousMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Continuous}
 const DiscreteMultivariateMeasure = AbstractProbabilityMeasure{Multivariate,Discrete}
+const ContinuousMatrixvariateMeasure = AbstractProbabilityMeasure{Matrixvariate,Continuous}
 
 # Reuse the same measure for every value in a broadcast.
 Base.broadcastable(d::AbstractProbabilityMeasure) = Ref(d)

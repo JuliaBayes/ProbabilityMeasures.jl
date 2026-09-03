@@ -13,7 +13,7 @@ module ProbabilityMeasures
 
 using DensityInterface: DensityInterface, densityof, logdensityof
 using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
-using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
+using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling, diag, issymmetric
 using Random: Random, AbstractRNG
 using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
@@ -22,6 +22,7 @@ using StatsAPI: StatsAPI, params
 include("core/types.jl")
 include("core/mathfuns.jl")
 include("core/gammainc.jl")
+include("core/linalg.jl")
 include("core/support.jl")
 include("core/interface.jl")
 
@@ -41,14 +42,17 @@ include("univariate/discrete/poisson.jl")
 include("multivariate/continuous/mvnormal.jl")
 include("multivariate/discrete/multinomial.jl")
 
+include("matrixvariate/continuous/wishart.jl")
+
 # Export the operations commonly needed by probabilistic programs.
 
 # Core types
 export AbstractProbabilityMeasure
-export VariateForm, Univariate, Multivariate
+export VariateForm, Univariate, Multivariate, Matrixvariate
 export ValueSupport, Continuous, Discrete
 export ContinuousUnivariateMeasure, DiscreteUnivariateMeasure
 export ContinuousMultivariateMeasure, DiscreteMultivariateMeasure
+export ContinuousMatrixvariateMeasure
 
 # Supports
 export Support,
@@ -59,7 +63,8 @@ export Support,
     RealInterval,
     IntegerRange,
     IntegerSimplex,
-    RealVectors
+    RealVectors,
+    PositiveDefiniteMatrices
 export support, insupport
 
 # Interface
@@ -85,5 +90,6 @@ export Binomial
 export Poisson
 export MvNormal
 export Multinomial
+export Wishart
 
 end

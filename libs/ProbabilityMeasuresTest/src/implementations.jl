@@ -249,3 +249,51 @@ function _extremepoints(d::MvNormal)
         Float64[],
     )
 end
+
+# Optional methods for matrix-variate measures.
+
+@implements MeasureInterface{(:matrixsummaries, :entropy)} Wishart [
+    Wishart(5.0, [1.0 0.0; 0.0 1.0]),
+    Wishart(3.5, [2.0 0.0; 0.5 1.5]),
+    Wishart(4.0f0, Float32[1.0 0.0; -0.25 0.5]),
+]
+
+# Keep invalid examples the same size as the measure under test.
+function _invalids(d::Wishart)
+    p, T = size(d.L, 1), _elscalar(d)
+    singular, flipped = _identity(T, p), _identity(T, p)
+    singular[1, 1] = 0
+    flipped[1, 1] = -1
+    return (
+        # A measure at `p - 1` degrees of freedom is singular and has no density.
+        Wishart(T(p) - one(T), _identity(T, p)),
+        Wishart(d.ν, singular),
+        Wishart(d.ν, flipped),
+    )
+end
+
+# Use a non-unit factor so the precision check includes a nonzero logarithm.
+function _exactparams(d::Wishart)
+    p = size(d.L, 1)
+    return Wishart(2p, [i == j ? 2 : Int(i > j) for i in 1:p, j in 1:p])
+end
+
+# Multiples of the scale matrix are positive definite whatever the factor is.
+function default_testpoints(d::Wishart)
+    S, T = scalematrix(d), _elscalar(d)
+    return [convert(T, c) .* S for c in (d.ν, 1, 2)]
+end
+
+function _extremepoints(d::Wishart)
+    p = size(d.L, 1)
+    return (
+        fill(Inf, p, p),
+        fill(-Inf, p, p),
+        fill(NaN, p, p),
+        fill(floatmax(Float64), p, p),
+        zeros(p, p),
+        -ones(p, p),
+        zeros(p + 1, p + 1),
+        zeros(0, 0),
+    )
+end
