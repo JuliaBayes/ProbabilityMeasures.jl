@@ -46,7 +46,7 @@ validateparams(Categorical([2.0, 2.0]))   # DomainError: does not sum to one
 """
 function validateparams(d::AbstractProbabilityMeasure)
     checkparams(d) && return d
-    throw(DomainError(d, "invalid parameters; see `checkparams`"))
+    return throw(DomainError(d, "invalid parameters; see `checkparams`"))
 end
 
 """
@@ -63,16 +63,25 @@ end
 end
 
 """
+    valuetype(d, x)
+
+The floating-point type of a density, tail probability, or quantile of `d` at `x`.
+
+It promotes the parameter types with the type of `x`, so a `BigFloat` argument keeps its
+precision and exact parameters do not reduce it.
+"""
+@inline function valuetype(::D, x::Number) where {D<:AbstractProbabilityMeasure}
+    return float(promote_type(_promoted_paramtype(D), typeof(x)))
+end
+
+"""
     masstype(d, x)
 
 The floating-point type for the probability of `x` under a discrete `d`.
 
-It promotes the parameter types with the type of `x`, so a `BigFloat` argument keeps
-its precision.
+See [`valuetype`](@ref), of which this is the discrete case.
 """
-@inline function masstype(::D, x::Number) where {D<:DiscreteMeasure}
-    return float(promote_type(_promoted_paramtype(D), typeof(x)))
-end
+@inline masstype(d::DiscreteMeasure, x::Number) = valuetype(d, x)
 
 function Random.rand(
     rng::AbstractRNG, sp::Random.SamplerTrivial{<:AbstractProbabilityMeasure}

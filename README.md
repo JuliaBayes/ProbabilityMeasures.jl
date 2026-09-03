@@ -11,8 +11,9 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Uniform`, `Laplace`, `Cauchy`, `Gamma`, `Categorical`, `Bernoulli`,
-`Binomial`, `Poisson`, `MvNormal`, `Multinomial`, and `Wishart`.
+`Exponential`, `Uniform`, `Laplace`, `Cauchy`, `Gamma`, `InverseGamma`,
+`Categorical`, `Bernoulli`, `Binomial`, `Poisson`, `MvNormal`, `Multinomial`, and
+`Wishart`.
 
 ## Installation
 
@@ -62,8 +63,8 @@ than throwing.
 ## Available API
 
 `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Uniform(a, b)`,
-`Laplace(μ, b)`, `Cauchy(μ, σ)`, `Gamma(α, θ)`, `Categorical(p)`, `Bernoulli(p)`,
-`Binomial(n, p)`, and `Poisson(λ)` each support:
+`Laplace(μ, b)`, `Cauchy(μ, σ)`, `Gamma(α, θ)`, `InverseGamma(α, θ)`,
+`Categorical(p)`, `Bernoulli(p)`, `Binomial(n, p)`, and `Poisson(λ)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -81,6 +82,13 @@ until the terms stop changing the result. They work in the type they are given, 
 `BigFloat` keeps its precision, but they cannot run in traced or device-side code.
 Sampling has no such limit: it uses rejection, and the accept step runs on plain
 floating-point noise, which leaves the draw differentiable with respect to `α` and `θ`.
+
+`InverseGamma(α, θ)` is the measure of `1/X` for `X` distributed as `Gamma(α, 1/θ)`. Its
+mean is `θ/(α - 1)` and is infinite at or below a unit shape; the variance needs a shape
+above two. Its distribution functions read the *upper* incomplete gamma integral, and
+`quantile` inverts that same tail, so `quantile(d, 1e-300)` is a positive number rather
+than the zero a detour through `1 - p` would give. It shares `Gamma`'s limits otherwise:
+a closed-form density, and iterative distribution functions.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -234,9 +242,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
-`Uniform`, `Cauchy`, `Laplace`, `Gamma`, `Categorical`, `Bernoulli`, `Binomial`,
-`Poisson`, `MvNormal`, `Multinomial`, and `Wishart`. Transformed or composite measures and
-Distributions.jl interoperability are not implemented yet.
+`Uniform`, `Cauchy`, `Laplace`, `Gamma`, `InverseGamma`, `Categorical`, `Bernoulli`,
+`Binomial`, `Poisson`, `MvNormal`, `Multinomial`, and `Wishart`. Transformed or composite
+measures and Distributions.jl interoperability are not implemented yet.
 
 ## Citation
 

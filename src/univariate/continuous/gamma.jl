@@ -49,18 +49,6 @@ end
 
 support(::Gamma) = PositiveReals()
 
-"""
-    valuetype(d::Gamma, x)
-
-The floating-point type of a density, tail probability, or quantile at `x`.
-
-It promotes the parameter types with the type of `x`, so exact parameters keep the
-argument's precision.
-"""
-@inline function valuetype(d::Gamma, x::Number)
-    return float(promote_type(typeof(d.α), typeof(d.θ), typeof(x)))
-end
-
 @inline function DensityInterface.logdensityof(d::Gamma, x::Number)
     T = valuetype(d, x)
     α, θ, y = convert(T, d.α), convert(T, d.θ), convert(T, x)
@@ -149,24 +137,31 @@ logccdf(d::Gamma, x::Number) = gammatail(loggammaq, d, x, 0, -Inf)
 const GAMMAQUANTILE_MAXITER = 100
 
 """
-    gammaquantile(a, p)
+    gammaquantile(a, p, islower)
 
-The `p`-quantile of the unit-scale gamma measure with shape `a`, for `0 < p < 1`.
+The point `y` where the unit-scale gamma measure with shape `a` puts probability `p` on
+one tail, for `0 < p < 1`. `islower` selects the tail: `true` solves
+[`loggammap`](@ref)`(a, y) == log(p)` and `false` solves [`loggammaq`](@ref).
 
-Newton's method on `log(x)` refines a closed-form starting point until the step stops
+Taking the tail rather than a lower-tail probability is what lets a measure built on the
+upper tail, such as [`InverseGamma`](@ref), invert it without first forming `1 - p` and
+losing the small tail to rounding.
+
+Newton's method on `log(y)` refines a closed-form starting point until the step stops
 moving it. The logarithm is what keeps the deep lower tail, where the quantile itself
 underflows, from collapsing onto zero at the first step.
 """
-function gammaquantile(a::T, p::T) where {T<:Number}
+function gammaquantile(a::T, p::T, islower::Bool) where {T<:Number}
     #=
-      Solve on whichever tail holds the smaller probability. The other tail is near one,
+      Solve on whichever tail holds the smaller probability. The other one is near one,
       where its logarithm is flat and Newton's method has almost no slope to descend.
-      `1 - p` is exact above one half, so the split costs no precision.
+      `1 - p` is exact above one half, so the switch costs no precision.
     =#
-    lower = p <= one(T) / 2
-    target = lower ? logt(p) : log1p(-p)
+    small = p <= one(T) / 2
+    lower = islower == small
+    target = small ? logt(p) : log1p(-p)
 
-    u = gammaquantile_start(a, p, lower)
+    u = gammaquantile_start(a, target, lower)
     tol = eps(basefloat(T))
     for _ in 1:GAMMAQUANTILE_MAXITER
         y = exp(u)
@@ -183,13 +178,18 @@ function gammaquantile(a::T, p::T) where {T<:Number}
     return exp(u)
 end
 
-@inline function gammaquantile_start(a::T, p::T, lower::Bool) where {T<:Number}
-    # Small probabilities follow `P(a, y) ≈ y^a / Γ(a+1)`, which inverts directly.
-    logr = (logt(p) + loggamma(a + one(T))) / a
-    lower && logr < logt((one(T) + a) / 5) && return logr
-    # Elsewhere, Wilson and Hilferty's cube-root normal approximation.
-    z = -(sqrt2 * erfcinvt(2 * p))
-    w = a * (one(T) - inv(9 * a) + z / (3 * sqrt(a)))^3
+# `target` is the logarithm of the tail being solved, which always holds at most half
+# the mass, so the lower-tail probability is `target` itself or its complement.
+@inline function gammaquantile_start(a::T, target::T, lower::Bool) where {T<:Number}
+    tail = exp(target)
+    loglower = lower ? target : log1p(-tail)
+    # A small lower tail follows `P(a, y) ≈ y^a / Γ(a+1)`, which inverts directly.
+    logr = (loglower + loggamma(a + one(T))) / a
+    logr < logt((one(T) + a) / 5) && return logr
+    # Elsewhere, Wilson and Hilferty's cube-root normal approximation. The normal
+    # quantile of the tail being solved changes sign with the tail.
+    z = sqrt2 * erfcinvt(2 * tail)
+    w = a * (one(T) - inv(9 * a) + (lower ? -z : z) / (3 * sqrt(a)))^3
     return (isfinite(w) & (w > zero(T))) ? logt(w) : logr
 end
 
@@ -200,7 +200,7 @@ function Statistics.quantile(d::Gamma, p::Number)
     (isnan(q) | (q < zero(T)) | (q > one(T))) && return convert(T, NaN)
     iszero(q) && return zero(T)
     isone(q) && return convert(T, Inf)
-    return convert(T, d.θ) * gammaquantile(convert(T, d.α), q)
+    return convert(T, d.θ) * gammaquantile(convert(T, d.α), q, true)
 end
 
 function Base.show(io::IO, d::Gamma)

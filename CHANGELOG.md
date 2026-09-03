@@ -75,6 +75,16 @@ and this project adheres to [Semantic Versioning].
   loop therefore runs on plain numbers whatever type the parameters carry, and the
   accepted noise enters the draw through arithmetic on `α` and `θ`, which is what leaves
   the draw differentiable with respect to both.
+- `InverseGamma(α, θ)`, the measure of `1/X` for `X` distributed as `Gamma(α, 1/θ)`. Its
+  mean is infinite at or below a unit shape and its variance at or below a shape of two,
+  both of which it reports rather than returning a negative number. Its distribution
+  functions read the upper incomplete gamma integral at `θ/x`, and `quantile` inverts
+  that same tail: `gammaquantile` now takes which tail its probability measures, so a
+  probability as small as `1e-300` gives a positive quantile instead of the zero a
+  detour through `1 - p` would give.
+- `valuetype(d, x)`, the promoted floating-point type of a density, tail probability, or
+  quantile, in `core/interface.jl`. `masstype` becomes its discrete case rather than a
+  second copy of the same promotion.
 - `Wishart(ν, L)`, the first matrix-variate measure, with the `Matrixvariate` variate
   form and the `ContinuousMatrixvariateMeasure` alias it dispatches on, and the
   `PositiveDefiniteMatrices` support. `L` is the lower-triangular factor of the scale

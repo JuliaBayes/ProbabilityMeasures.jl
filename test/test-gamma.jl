@@ -174,6 +174,16 @@ end
     end
 end
 
+@testset "the quantile solver inverts either tail" begin
+    # `InverseGamma` reads the upper tail, so the solver takes which tail `p` measures.
+    for a in (0.5, 2.0, 9.0), p in (1e-8, 0.1, 0.5, 0.9, 1 - 1e-9)
+        lower = ProbabilityMeasures.gammaquantile(a, p, true)
+        upper = ProbabilityMeasures.gammaquantile(a, p, false)
+        @test exp(ProbabilityMeasures.loggammap(a, lower)) ≈ p rtol = 1e-10
+        @test exp(ProbabilityMeasures.loggammaq(a, upper)) ≈ p rtol = 1e-10
+    end
+end
+
 @testset "the quantile keeps BigFloat precision" begin
     setprecision(BigFloat, 256) do
         d = Gamma(big"2.5", big"1.5")

@@ -33,6 +33,7 @@ include("univariate/continuous/uniform.jl")
 include("univariate/continuous/laplace.jl")
 include("univariate/continuous/cauchy.jl")
 include("univariate/continuous/gamma.jl")
+include("univariate/continuous/inversegamma.jl")
 
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
@@ -84,6 +85,7 @@ export Uniform
 export Laplace
 export Cauchy
 export Gamma
+export InverseGamma
 export Categorical
 export Bernoulli
 export Binomial

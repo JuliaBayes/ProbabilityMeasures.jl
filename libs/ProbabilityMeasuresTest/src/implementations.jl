@@ -65,6 +65,24 @@ end
 # Use a shape and a scale that leave `loggamma(α)` and `log(θ)` non-zero.
 _exactparams(::Gamma) = Gamma(3, 2)
 
+# Keep the shape above four so the sampled variance in the moment check has a finite
+# variance of its own.
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} InverseGamma [
+    InverseGamma(6.0, 1.0), InverseGamma(8.0, 2.5), InverseGamma(7.0f0, 0.5f0)
+]
+
+function _invalids(::InverseGamma)
+    return (
+        InverseGamma(-1.0, 1.0),
+        InverseGamma(0.0, 1.0),
+        InverseGamma(1.0, -1.0),
+        InverseGamma(Inf, 1.0),
+    )
+end
+
+# Use a shape and a scale that leave `loggamma(α)` and `log(θ)` non-zero.
+_exactparams(::InverseGamma) = InverseGamma(3, 2)
+
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Categorical [
     Categorical([0.2, 0.3, 0.5]), Categorical([1.0]), Categorical(Float32[0.25, 0.75])
 ]
