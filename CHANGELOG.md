@@ -63,6 +63,23 @@ and this project adheres to [Semantic Versioning].
   direct `logccdf` stays accurate in the upper tail, and the density at zero follows
   the shape: infinite below `α = 1`, `1/θ` at it, zero above. A sample is a
   transformed unit-exponential draw, differentiable in the parameters.
+- `Gamma(α, θ)`, with a shape and a scale so that the mean is `α * θ`. Its density is
+  closed form; `cdf`, `ccdf`, `logcdf`, `logccdf`, `quantile`, `median`, `entropy` and
+  `rand` are not, and sum a series, run a continued fraction, or iterate Newton's method
+  until the terms stop changing the result, in whatever type they are given, so
+  `BigFloat` keeps its precision and differentiation tools follow the iteration. Sampling
+  inverts the CDF, so the derivative of a draw with respect to either parameter is the
+  exact reparameterization gradient, at the cost of a Newton solve per draw.
+- `wrappedconditions(T)`, a trait for numbers whose comparisons are not a `Bool`. The
+  Reactant extension sets it for traced numbers, and `Gamma`'s loops then run a fixed
+  number of terms with `select` in place of every value-driven branch, so the same code
+  compiles under Reactant. That path is exact for shapes up to about `900` in `Float64`
+  and `2000` in `Float32`, and returns `NaN` above.
+- `loggammap(a, x)` and `loggammaq(a, x)`, the regularized incomplete gamma integrals in
+  log space, which keep `Gamma`'s `logcdf` and `logccdf` finite where the probabilities
+  underflow. Relative accuracy sits at the rounding error of the argument type for shapes
+  up to about `1000` and then falls off roughly in proportion to the shape: against
+  `SpecialFunctions.gamma_inc` it is `5e-13` at shape `1000` and `2e-10` at shape `10^5`.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`

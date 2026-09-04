@@ -11,8 +11,8 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Weibull`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`, `Bernoulli`,
-`Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
+`Exponential`, `Weibull`, `Gamma`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`,
+`Bernoulli`, `Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
 
 ## Installation
 
@@ -61,9 +61,9 @@ than throwing.
 
 ## Available API
 
-`Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Weibull(α, θ)`, `Uniform(a, b)`,
-`Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`, `Bernoulli(p)`, `Binomial(n, p)`,
-`Poisson(λ)`, and `Geometric(p)` each support:
+`Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Weibull(α, θ)`, `Gamma(α, θ)`,
+`Uniform(a, b)`, `Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`, `Bernoulli(p)`,
+`Binomial(n, p)`, `Poisson(λ)`, and `Geometric(p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -73,6 +73,14 @@ than throwing.
 
 `Cauchy(μ, σ)` has no finite mean or variance, so `mean`, `var` and `std` return `NaN`.
 `median` and `entropy` are exact.
+
+`Gamma(α, θ)` takes a shape and a scale, so its mean is `α * θ`, and `Gamma(α)` sets the
+scale to one. Its density is closed form, but `cdf`, `ccdf`, `logcdf`, `logccdf`,
+`quantile`, `median`, `entropy` and `rand` are not. They iterate until the terms stop
+changing the result, so `BigFloat` keeps its precision and differentiation tools follow
+the iteration. Under Reactant they run a fixed number of terms instead, exact for shapes
+up to about `900` in `Float64`. Sampling inverts the CDF, so derivatives of a draw with
+respect to `α` and `θ` are exact.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -206,9 +214,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 ## Current scope
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
-`Weibull`, `Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`, `Binomial`,
-`Poisson`, `Geometric`, `MvNormal`, and `Multinomial`. Transformed or composite measures
-and Distributions.jl interoperability are not implemented yet.
+`Weibull`, `Gamma`, `Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`,
+`Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`. Transformed or
+composite measures and Distributions.jl interoperability are not implemented yet.
 
 ## Citation
 

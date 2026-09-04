@@ -9,6 +9,18 @@ add methods that evaluate both, so each function must be safe to call.
 @inline select(cond::Bool, iftrue, iffalse) = cond ? iftrue() : iffalse()
 
 """
+    wrappedconditions(T) -> Bool
+
+Whether comparisons on a `T` give a wrapped condition rather than a `Bool`.
+
+A loop that stops when its terms stop changing the result needs a `Bool`. Where this is
+true, such loops run a fixed number of terms instead, with [`select`](@ref) in place of
+every value-driven branch. It is false for every type Base knows; the Reactant extension
+sets it for traced numbers.
+"""
+wrappedconditions(::Type) = false
+
+"""
     logt(x)
 
 Like `log`, but returns `NaN` instead of throwing for a negative input.
