@@ -61,5 +61,19 @@ using Test
         z = 0.5
         expected = [1 / 1.5 + (1 - z^1.5) * log(z), 0.75 * (z^1.5 - 1)]
         @test [Float64(got[1]), Float64(got[2])] ≈ expected rtol = 1e-10
+
+        #=
+          The Gamma draw runs the fixed-length quantile solve, so this differentiates
+          through traced loops. The shape derivative has no closed form; compare with a
+          central difference of the plain-float quantile. The scale derivative is the
+          unit-scale quantile itself.
+        =#
+        loss = (a, s) -> quantile(Gamma(a, s), 0.3)
+        grad = (a, s) -> Enzyme.gradient(Enzyme.Reverse, loss, a, s)
+        got = @jit grad(Reactant.ConcreteRNumber(2.0), Reactant.ConcreteRNumber(1.5))
+        h = 1e-6
+        dα = (quantile(Gamma(2.0 + h, 1.5), 0.3) - quantile(Gamma(2.0 - h, 1.5), 0.3)) / 2h
+        @test Float64(got[1]) ≈ dα rtol = 1e-6
+        @test Float64(got[2]) ≈ quantile(Gamma(2.0, 1.0), 0.3) rtol = 1e-10
     end
 end
