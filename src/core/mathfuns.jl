@@ -9,6 +9,18 @@ add methods that evaluate both, so each function must be safe to call.
 @inline select(cond::Bool, iftrue, iffalse) = cond ? iftrue() : iffalse()
 
 """
+    wrappedconditions(T) -> Bool
+
+Whether comparisons on a `T` give a wrapped condition rather than a `Bool`.
+
+A loop that stops when its terms stop changing the result needs a `Bool`. Where this is
+true, such loops run a fixed number of terms instead, with [`select`](@ref) in place of
+every value-driven branch. It is false for every type Base knows; the Reactant extension
+sets it for traced numbers.
+"""
+wrappedconditions(::Type) = false
+
+"""
     logt(x)
 
 Like `log`, but returns `NaN` instead of throwing for a negative input.
@@ -66,15 +78,3 @@ basefloat(::Type{T}) where {T<:AbstractFloat} = T
 basefloat(::Type{T}) where {T<:Real} = float(T)
 basefloat(::Type{Bool}) = Float64
 basefloat(::Type{<:Irrational}) = Float64
-
-"""
-    basevalue(x) -> AbstractFloat
-
-The plain floating-point value inside `x`.
-
-A rejection sampler compares against it so that its accept step runs on plain numbers
-whatever wrapped type automatic differentiation or tracing has substituted. The accepted
-noise then enters the draw through arithmetic on the parameters, which automatic
-differentiation can follow. Package extensions add methods for wrapped types.
-"""
-basevalue(x::Number) = float(x)

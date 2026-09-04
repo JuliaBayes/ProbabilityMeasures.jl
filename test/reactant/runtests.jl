@@ -21,6 +21,9 @@ using Test
         # Both shape regimes: the log-density branches change at `α = 1`.
         Weibull(1.5, 2.0),
         Weibull(0.75, 2.5),
+        # Fixed-length incomplete gamma loops and Newton steps; both shape regimes.
+        Gamma(2.0, 1.5),
+        Gamma(0.5, 3.0),
     )
         test_reactant(d, default_testpoints(d))
     end

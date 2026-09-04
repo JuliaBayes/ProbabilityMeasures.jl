@@ -3,7 +3,7 @@ using ProbabilityMeasuresTest: test_measure
 using Distributions: Distributions
 using ForwardDiff: ForwardDiff
 using Random: Random, Xoshiro
-using SpecialFunctions: digamma, gamma_inc
+using SpecialFunctions: digamma, gamma_inc, trigamma
 using Test
 
 @testset "conformance" begin
@@ -217,9 +217,9 @@ end
     d = Gamma(2.0, 1.5)
     @test rand(Xoshiro(1), d) isa Float64
     @test rand(Xoshiro(1), Gamma(2.0f0, 1.5f0)) isa Float32
-    # Mixed parameter types must still draw `eltype(d)`.
+    # Mixed parameter types draw `eltype(d)`.
     @test rand(Xoshiro(1), Gamma(2, 1.5f0)) isa Float32
-    @test rand(Xoshiro(1), Gamma(0.5f0, 2)) isa Float32
+    @test rand(Xoshiro(1), Gamma(2, 3)) isa Float64
     @test size(rand(Xoshiro(1), d, 3, 4)) == (3, 4)
     @test eltype(rand(Xoshiro(1), d, 5)) === Float64
 
@@ -227,32 +227,83 @@ end
     Random.rand!(Xoshiro(1), v, d)
     @test all(x -> insupport(d, x), v)
 
-    # Both the direct method and the boost below a unit shape.
-    for α in (0.2, 0.9, 1.0, 3.0, 40.0)
+    # A draw is the quantile at the uniform noise value.
+    seed = 0x4153554b41
+    u = rand(Xoshiro(seed), Float64)
+    @test rand(Xoshiro(seed), d) == quantile(d, u)
+
+    # Invalid parameters give `NaN` rather than throwing.
+    for m in (Gamma(-1.0, 1.0), Gamma(NaN, 1.0), Gamma(1.0, -1.0), Gamma(0.0, 1.0))
+        @test isnan(rand(Xoshiro(1), m))
+    end
+
+    # Shapes on both sides of one, where the quantile's starting point changes form.
+    for α in (0.05, 0.3, 1.0, 3.0, 40.0)
         m = Gamma(α, 2.0)
         draws = rand(Xoshiro(20250801), m, 200_000)
         @test all(x -> insupport(m, x), draws)
         @test mean(draws) ≈ mean(m) atol = 5 * std(m) / sqrt(200_000)
         @test var(draws) ≈ var(m) rtol = 0.05
     end
+end
 
-    # The rejection loop must not run forever or throw on invalid parameters.
-    for bad in (Gamma(NaN, 1.0), Gamma(-1.0, 1.0), Gamma(0.0, 1.0), Gamma(2.0, -1.0))
-        @test isnan(rand(Xoshiro(1), bad))
+@testset "the sample derivative is the reparameterization gradient" begin
+    #=
+      Differentiating the draw at fixed noise must agree with the implicit derivative
+      `-∂F/∂α / p(x)` of the quantile, and its expectation must match the derivative of
+      the mean, `θ`, and of `E[log x] = ψ(α) + log θ`, which is `ψ'(α)`. A rejection
+      sampler that ignores its accept step misses the second by 16% at `α = 1`.
+    =#
+    for α in (0.4, 2.0, 9.0), θ in (0.5, 2.0), u in (0.05, 0.5, 0.95)
+        g = ForwardDiff.gradient(p -> quantile(Gamma(p[1], p[2]), u), [α, θ])
+        d = Gamma(α, θ)
+        x = quantile(d, u)
+        implicit = -ForwardDiff.derivative(a -> cdf(Gamma(a, θ), x), α) / densityof(d, x)
+        @test g[1] ≈ implicit rtol = 1e-8
+        @test g[2] ≈ x / θ rtol = 1e-12
+    end
+
+    n = 100_000
+    for α in (0.5, 1.0, 3.0)
+        θ = 2.0
+        rng = Xoshiro(7)
+        dmean, dlog = 0.0, 0.0
+        for _ in 1:n
+            u = rand(rng)
+            x = quantile(Gamma(α, θ), u)
+            dx = ForwardDiff.derivative(a -> quantile(Gamma(a, θ), u), α)
+            dmean += dx
+            dlog += dx / x
+        end
+        @test dmean / n ≈ θ rtol = 0.02
+        @test dlog / n ≈ trigamma(α) rtol = 0.03
     end
 end
 
-@testset "sample derivative follows the parameters" begin
-    # The accept step runs on plain noise, so at fixed noise the draw is a smooth
-    # function of both parameters. Compare with a central difference at the same seed.
-    for α in (0.4, 2.0, 9.0), θ in (0.5, 2.0)
-        draw(p) = rand(Xoshiro(7), Gamma(p[1], p[2]))
-        g = ForwardDiff.gradient(draw, [α, θ])
-        h = 1e-6
-        dα = (draw([α + h, θ]) - draw([α - h, θ])) / 2h
-        dθ = (draw([α, θ + h]) - draw([α, θ - h])) / 2h
-        @test g[1] ≈ dα rtol = 1e-4
-        @test g[2] ≈ dθ rtol = 1e-6
-        @test !iszero(g[1])
+@testset "the fixed-length path matches the converging one" begin
+    @test !ProbabilityMeasures.wrappedconditions(Float64)
+    @test !ProbabilityMeasures.wrappedconditions(ForwardDiff.Dual{Nothing,Float64,1})
+
+    # Both tails, on both sides of the crossover, up to the shape the term count covers.
+    for a in (0.1, 1.0, 7.5, 100.0, 900.0), r in (0.05, 0.5, 0.97, 1.0, 1.03, 2.0, 5.0)
+        x = r * (a + 1)
+        lp, lq = ProbabilityMeasures.loggammapq_fixed(a, x)
+        @test lp ≈ ProbabilityMeasures.loggammap(a, x) atol = 1e-13
+        @test lq ≈ ProbabilityMeasures.loggammaq(a, x) atol = 1e-13
+    end
+    @test all(isnan, ProbabilityMeasures.loggammapq_fixed(1500.0, 1500.0))
+    @test ProbabilityMeasures.gammainc_maxshape(Float64) > 900
+    @test ProbabilityMeasures.gammainc_maxshape(Float32) > 2000
+
+    # The fixed number of Newton steps reaches the converging answer for every noise value.
+    # With plain floats the steps still call the converging tails; the composition with
+    # the fixed tails runs under Reactant in `test/reactant`.
+    rng = Xoshiro(3)
+    for a in (0.05, 0.3, 1.0, 2.5, 100.0, 800.0)
+        for _ in 1:2_000
+            u = rand(rng)
+            @test ProbabilityMeasures.gammaquantile_fixed(a, u) ≈
+                ProbabilityMeasures.gammaquantile(a, u) rtol = 1e-12
+        end
     end
 end

@@ -76,12 +76,11 @@ than throwing.
 
 `Gamma(α, θ)` takes a shape and a scale, so its mean is `α * θ`, and `Gamma(α)` sets the
 scale to one. Its density is closed form, but `cdf`, `ccdf`, `logcdf`, `logccdf`,
-`quantile`, `median` and `entropy` are not: they iterate until the terms stop changing
-the result, so they keep `BigFloat` precision but cannot run in traced or device-side
-code. Sampling uses rejection with the accept step on plain floating-point noise, so
-derivatives with respect to `α` and `θ` flow through the accepted draw. Because the
-acceptance itself depends on `α`, that derivative is an approximation of the
-reparameterization gradient, not the exact one the other samplers give.
+`quantile`, `median`, `entropy` and `rand` are not. They iterate until the terms stop
+changing the result, so `BigFloat` keeps its precision and differentiation tools follow
+the iteration. Under Reactant they run a fixed number of terms instead, exact for shapes
+up to about `900` in `Float64`. Sampling inverts the CDF, so derivatives of a draw with
+respect to `α` and `θ` are exact.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -170,8 +169,7 @@ Scalar sampling is reparameterized: noise is drawn in the underlying floating-po
 type and the measure parameters enter through arithmetic. This allows derivatives with
 respect to the parameters without custom derivative rules. Categorical draws do not
 have a pathwise derivative, but their log-density is differentiable with respect to
-the probabilities. `Gamma` draws by rejection, and its derivative holds the accepted
-noise fixed, so it is approximate.
+the probabilities.
 
 `Categorical` accepts any `AbstractVector`. Use an `isbits` vector type, such as
 `StaticArrays.SVector`, when the complete measure must be `isbits`.

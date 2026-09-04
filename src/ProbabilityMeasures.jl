@@ -65,7 +65,7 @@ export Support,
 export support, insupport
 
 # Interface
-export checkparams, validateparams, noisetype, basefloat, basevalue
+export checkparams, validateparams, noisetype, basefloat
 export cdf, ccdf, logcdf, logccdf, entropy
 
 # Re-export common operations from package dependencies.

@@ -31,16 +31,19 @@ isnan(logdensityof(Gamma(-1.0, 1.0), 1.0))  # true
 
 # Cost
 
-`logdensityof` is closed form. `cdf`, `ccdf`, `logcdf`, `logccdf`, `quantile`, `median`
-and `entropy` are not: they sum a series, run a continued fraction, or iterate Newton's
-method until the terms stop changing the result, which rules out traced and
-device-side evaluation. See [`loggammap`](@ref).
+`logdensityof` is closed form. `cdf`, `ccdf`, `logcdf`, `logccdf`, `quantile`, `median`,
+`entropy` and `rand` are not: they sum a series, run a continued fraction, or iterate
+Newton's method. Each loop runs until its terms stop changing the result, in the type
+it is given, so `BigFloat` keeps its precision and differentiation tools follow the
+iteration. Traced numbers, for which [`wrappedconditions`](@ref) is true, run a fixed
+number of terms with no value-driven control flow instead, so the same code compiles
+under Reactant; that path is exact for shapes up to about `900` in `Float64` and `2000`
+in `Float32`, and returns `NaN` above. See [`loggammap`](@ref).
 
-Sampling uses Marsaglia and Tsang's rejection method. The accept step runs on plain
-floating-point noise, and the accepted noise enters the draw through arithmetic on `α`
-and `θ`, so automatic differentiation follows both parameters. That derivative holds
-the accepted noise fixed while the acceptance itself depends on `α`, so it is an
-approximation, not the exact reparameterization gradient the inverse-CDF samplers give.
+Sampling inverts the CDF: a draw is `θ` times the unit-scale quantile at a uniform noise
+value. Both parameters enter through arithmetic, so automatic differentiation gives the
+exact reparameterization gradient with respect to each. The price is a Newton solve per
+draw, a few microseconds at moderate shapes.
 """
 struct Gamma{A<:Number,T<:Number} <: ContinuousUnivariateMeasure
     α::A
@@ -85,53 +88,10 @@ end
     )
 end
 
-"""
-    gammanoise(rng, a)
-
-The standard normal draw that Marsaglia and Tsang's method accepts for shape `a >= 1`.
-
-``(a - 1/3)(1 + z/\\sqrt{9a - 3})^3`` is then a draw from the unit-scale gamma measure.
-The loop does not terminate for a non-finite `a`, so callers must check the shape.
-"""
-function gammanoise(rng::AbstractRNG, a::F) where {F<:AbstractFloat}
-    c = a - one(F) / 3
-    w = inv(sqrt(9 * c))
-    while true
-        z = randn(rng, F)
-        v = muladd(w, z, one(F))
-        if v > zero(F)
-            u = rand(rng, F)
-            v3 = v^3
-            # The squeeze accepts most draws without reaching the logarithms.
-            if u < muladd(-F(0.0331), z^4, one(F)) ||
-                log(u) < z^2 / 2 + c * (one(F) - v3 + log(v3))
-                return z
-            end
-        end
-    end
-end
-
-#=
-  Marsaglia and Tsang's method needs a shape of at least one. Below that, the identity
-  `Gamma(α, θ) = Gamma(α + 1, θ) · U^(1/α)` with `U` uniform supplies the rest.
-=#
+# The noise is plain, and the parameters enter through `quantile`, so automatic
+# differentiation follows them through the Newton solve.
 @inline function Base.rand(rng::AbstractRNG, d::Gamma)
-    F = noisetype(d)
-    # Promote first so mixed parameter types give a draw of `eltype(d)`.
-    α, θ = promote(d.α, d.θ)
-    boost = basevalue(α) < one(F)
-    a = boost ? α + one(α) : α
-    # Invalid parameters would loop forever, so they take `NaN` instead.
-    z = checkparams(d) ? gammanoise(rng, convert(F, basevalue(a))) : convert(F, NaN)
-    #=
-      Apply the parameters after drawing noise so automatic differentiation can follow
-      them. This must repeat `gammanoise`'s arithmetic to land on the accepted draw. The
-      `abs` keeps the square root from a domain error for an invalid shape, where `z` is
-      already `NaN`.
-    =#
-    c = a - one(a) / 3
-    x = θ * c * muladd(inv(sqrt(9 * abs(c))), z, one(c))^3
-    return boost ? x * rand(rng, F)^inv(α) : x
+    return quantile(d, rand(rng, noisetype(d)))
 end
 
 Statistics.mean(d::Gamma) = d.α * d.θ
@@ -148,17 +108,18 @@ end
 
 #=
   The four distribution functions differ only in the tail they take and in the two
-  values they hold outside `(0, ∞)`, where the answer is known without computing
-  anything.
+  values they hold at the ends of the support, where the answer is known without
+  computing anything. `tail` runs only for valid parameters, since `loggamma` throws
+  for a non-positive shape.
 =#
 @inline function gammatail(tail, d::Gamma, x::Number, below, above)
     T = valuetype(d, x)
-    checkparams(d) || return convert(T, NaN)
-    y = convert(T, x) / convert(T, d.θ)
-    isnan(y) && return convert(T, NaN)
-    y > zero(T) || return convert(T, below)
-    isfinite(y) || return convert(T, above)
-    return tail(convert(T, d.α), y)
+    α, s = convert(T, d.α), convert(T, x) / convert(T, d.θ)
+    valid = checkparams(d) & !isnan(s)
+    inside = isfinite(s) & (s > zero(T))
+    edge = select(s > zero(T), () -> convert(T, above), () -> convert(T, below))
+    value = select(valid & inside, () -> tail(α, s), () -> edge)
+    return select(valid, () -> value, () -> convert(T, NaN))
 end
 
 cdf(d::Gamma, x::Number) = gammatail((a, y) -> exp(loggammap(a, y)), d, x, 0, 1)
@@ -170,59 +131,98 @@ logccdf(d::Gamma, x::Number) = gammatail(loggammaq, d, x, 0, -Inf)
 # reaches `BigFloat` precision well inside this bound.
 const GAMMAQUANTILE_MAXITER = 100
 
+# The fixed-length path takes this many steps. The starting point is good to two or
+# three digits everywhere, which quadratic convergence carries past `Float64` in four.
+const GAMMAQUANTILE_STEPS = 8
+
 """
     gammaquantile(a, p)
 
 The `p`-quantile of the unit-scale gamma measure with shape `a`, for `0 < p < 1`.
 
-Newton's method on `log(x)` refines a closed-form starting point until the step stops
-moving it. The logarithm is what keeps the deep lower tail, where the quantile itself
-underflows, from collapsing onto zero at the first step.
-"""
-function gammaquantile(a::T, p::T) where {T<:Number}
-    #=
-      Solve on whichever tail holds the smaller probability. The other tail is near one,
-      where its logarithm is flat and Newton's method has almost no slope to descend.
-      `1 - p` is exact above one half, so the split costs no precision.
-    =#
-    lower = p <= one(T) / 2
-    target = lower ? logt(p) : log1p(-p)
+Newton's method on `log(x)` refines a closed-form starting point. The logarithm is what
+keeps the deep lower tail, where the quantile itself underflows, from collapsing onto
+zero at the first step. The iteration stops once a step falls below the square root of
+the rounding error, since quadratic convergence puts the next step below the rounding
+error itself. Traced numbers take `GAMMAQUANTILE_STEPS` steps with no value-driven
+control flow instead; see [`wrappedconditions`](@ref).
 
-    u = gammaquantile_start(a, p, lower)
-    tol = eps(basefloat(T))
+Newton solves on whichever tail holds the smaller probability. The other tail is near
+one, where its logarithm is flat and the method has almost no slope to descend. `1 - p`
+is exact above one half, so the split costs no precision.
+"""
+function gammaquantile(a::Number, p::Number)
+    fixedlength(a, p) && return gammaquantile_fixed(a, p)
+    lower = p <= one(p) / 2
+    target = lower ? logt(p) : log1p(-p)
+    lg = loggamma(a)
+    u = gammaquantile_start(a, p)
+    tol = sqrt(eps(basefloat(typeof(p))))
     for _ in 1:GAMMAQUANTILE_MAXITER
         y = exp(u)
-        (isfinite(y) & (y > zero(T))) || break
-        # The log-density of the unit-scale measure, written in `u` so that it stays
-        # accurate where `y` underflows.
-        g = muladd(a - one(T), u, -y) - loggamma(a)
-        tail = lower ? loggammap(a, y) : loggammaq(a, y)
-        # The tails run in opposite directions, so their Newton steps do too.
-        step = (tail - target) * exp(tail - g - u)
-        u = lower ? u - step : u + step
-        abs(step) <= tol * max(abs(u), one(T)) && break
+        (isfinite(y) & (y > zero(y))) || break
+        step = gammaquantile_step(a, lg, u, y, lower, target)
+        u -= step
+        abs(step) <= tol && break
     end
     return exp(u)
 end
 
-@inline function gammaquantile_start(a::T, p::T, lower::Bool) where {T<:Number}
-    # Small probabilities follow `P(a, y) ≈ y^a / Γ(a+1)`, which inverts directly.
-    logr = (logt(p) + loggamma(a + one(T))) / a
-    lower && logr < logt((one(T) + a) / 5) && return logr
-    # Elsewhere, Wilson and Hilferty's cube-root normal approximation.
+function gammaquantile_fixed(a::Number, p::Number)
+    lower = p <= one(p) / 2
+    target = select(lower, () -> logt(p), () -> log1pt(-p))
+    lg = loggamma(a)
+    u = gammaquantile_start(a, p)
+    for _ in 1:GAMMAQUANTILE_STEPS
+        u -= gammaquantile_step(a, lg, u, exp(u), lower, target)
+    end
+    return exp(u)
+end
+
+#=
+  The Newton step in `u = log y`. `g` is the log-density of the unit-scale measure,
+  written in `u` so that it stays accurate where `y` is tiny. The tails run in opposite
+  directions, so their steps have opposite signs.
+
+  Far from the root the step can overshoot deep into the upper tail, from where Newton
+  crawls back one unit of `u` per step, so the step is bounded. A subnormal `y` carries
+  too few digits for the tails to settle, and a zero one gives `NaN`; the quantile is
+  then below the smallest normal number and the current `u` is as good as it gets.
+=#
+@inline function gammaquantile_step(a, lg, u, y, lower, target)
+    g = muladd(a - one(a), u, -y) - lg
+    tail = select(lower, () -> loggammap(a, y), () -> loggammaq(a, y))
+    step = (tail - target) * exp(tail - g - u)
+    bounded = min(max(step, -2 * one(step)), 2 * one(step))
+    normal = y > oftype(y, floatmin(basefloat(typeof(y))))
+    safe = select(normal, () -> bounded, () -> zero(bounded))
+    return select(lower, () -> safe, () -> -safe)
+end
+
+#=
+  Near zero, `P(a, y) ≈ y^a / Γ(a+1)` inverts directly. Its relative error is about
+  `a y / (a + 1)`, so it serves while `y` stays below `(a + 1) / (5a)`, which for a small
+  shape covers most of the mass, upper tail included. Elsewhere, Wilson and Hilferty's
+  cube-root normal approximation is good to a few digits.
+=#
+@inline function gammaquantile_start(a::Number, p::Number)
+    logr = (logt(p) + loggamma(a + one(a))) / a
     z = -(sqrt2 * erfcinvt(2 * p))
-    w = a * (one(T) - inv(9 * a) + z / (3 * sqrt(a)))^3
-    return (isfinite(w) & (w > zero(T))) ? logt(w) : logr
+    w = a * (one(a) - inv(9 * a) + z / (3 * sqrt(a)))^3
+    small = logr < logt((one(a) + a) / (5 * a))
+    usable = isfinite(w) & (w > zero(w))
+    return select(small | !usable, () -> logr, () -> logt(w))
 end
 
 function Statistics.quantile(d::Gamma, p::Number)
     T = valuetype(d, p)
-    checkparams(d) || return convert(T, NaN)
-    q = convert(T, p)
-    (isnan(q) | (q < zero(T)) | (q > one(T))) && return convert(T, NaN)
-    iszero(q) && return zero(T)
-    isone(q) && return convert(T, Inf)
-    return convert(T, d.θ) * gammaquantile(convert(T, d.α), q)
+    α, θ, q = convert(T, d.α), convert(T, d.θ), convert(T, p)
+    # A `NaN` probability fails both comparisons.
+    valid = checkparams(d) & (q >= zero(T)) & (q <= one(T))
+    inside = (q > zero(T)) & (q < one(T))
+    edge = select(q == one(T), () -> convert(T, Inf), () -> zero(T))
+    value = select(valid & inside, () -> θ * gammaquantile(α, q), () -> edge)
+    return select(valid, () -> value, () -> convert(T, NaN))
 end
 
 function Base.show(io::IO, d::Gamma)
