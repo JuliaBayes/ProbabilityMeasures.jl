@@ -254,3 +254,15 @@ end
     # CDF inversion remains valid when `exp(-λ)` underflows.
     @test all(x -> insupport(d, x), rand(Xoshiro(1), Poisson(1000.0), 8))
 end
+
+@testset "the walk needs consecutive integers" begin
+    # Past `maxintfloat`, adding one to a float changes nothing, so the closed form gives
+    # up with `NaN` instead of looping forever. `Float64` still handles the same rate.
+    @test isnan(quantile(Poisson(1.7f7), 0.5f0))
+    @test isnan(rand(Xoshiro(1), Poisson(1.7f7)))
+    @test abs(quantile(Poisson(1.7e7), 0.5) - 1.7e7) <= 2
+    @test isnan(quantile(Poisson(1e16), 0.5))
+    # The rate is still valid, and the tails do not walk.
+    @test checkparams(Poisson(1.7f7))
+    @test cdf(Poisson(1.7f7), 1.7f7) ≈ 0.5 atol = 0.01
+end

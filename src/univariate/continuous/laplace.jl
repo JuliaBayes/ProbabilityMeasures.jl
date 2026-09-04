@@ -61,12 +61,15 @@ Convert `z` back to the original scale: ``\\mu + b z``.
     return -abs(z) - logt(2 * b)
 end
 
-# The difference of two unit exponential samples follows Laplace(0, 1).
-# Applying `μ` and `b` afterward lets automatic differentiation pass through the sample.
+#=
+  The difference of two unit exponential samples follows Laplace(0, 1). Applying `μ`
+  and `b` afterward lets automatic differentiation pass through the sample. `log1p(-u)`
+  rather than `log(u)`, so an exact zero draw gives a finite sample, not `Inf` or `NaN`.
+=#
 @inline function Base.rand(rng::AbstractRNG, d::Laplace)
     T = noisetype(d)
-    e₁ = -log(rand(rng, T))
-    e₂ = -log(rand(rng, T))
+    e₁ = -log1p(-rand(rng, T))
+    e₂ = -log1p(-rand(rng, T))
     return xval(d, e₁ - e₂)
 end
 

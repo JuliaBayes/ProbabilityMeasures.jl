@@ -44,7 +44,7 @@ Normal() = Normal(0.0, 1.0)
 Base.eltype(::Type{Normal{M,S}}) where {M,S} = float(promote_type(M, S))
 
 # Wrapped comparisons may not produce a `Bool`, so do not use `&&`.
-checkparams(d::Normal) = isfinite(d.μ) & (d.σ > zero(d.σ))
+checkparams(d::Normal) = isfinite(d.μ) & isfinite(d.σ) & (d.σ > zero(d.σ))
 
 support(::Normal) = RealLine()
 

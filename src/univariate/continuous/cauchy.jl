@@ -33,6 +33,8 @@ support(::Cauchy) = RealLine()
     return -logt(σ) - logπ - 2 * log(hypot(one(z), z))
 end
 
+# An exact zero draw gives `-Inf`, the quantile there. No shift of `u` avoids this,
+# since both ends of the quantile are infinite and `u` covers a half-open interval.
 @inline function Base.rand(rng::AbstractRNG, d::Cauchy)
     u = rand(rng, noisetype(d))
     return xval(d, -cospi(u) / sinpi(u))

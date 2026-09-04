@@ -71,10 +71,11 @@ end
 
 #=
   A draw is `θ E^(1/α)` for a unit exponential `E`. Applying the parameters after
-  drawing noise lets automatic differentiation follow them.
+  drawing noise lets automatic differentiation follow them. `log1p(-u)` rather than
+  `log(u)`, so an exact zero draw gives zero, not `Inf`.
 =#
 @inline function Base.rand(rng::AbstractRNG, d::Weibull)
-    e = -log(rand(rng, noisetype(d)))
+    e = -log1p(-rand(rng, noisetype(d)))
     α, θ = promote(d.α, d.θ)
     return θ * e^inv(α)
 end

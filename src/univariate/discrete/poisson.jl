@@ -19,7 +19,9 @@ plain floating-point arguments, which use the regularized incomplete gamma. The 
 numbers differentiation and tracing tools substitute are `Real` but not `AbstractFloat`,
 so they sum through [`horizon(d)`](@ref) at `O(λ)` and cannot run in traced or
 device-side code. `entropy` has no closed form and always sums. All five return `NaN`
-when `λ` is invalid or no usable `Int` horizon exists.
+when `λ` is invalid or no usable `Int` horizon exists. `quantile` and `rand` also return
+`NaN` when the horizon exceeds `maxintfloat` of the result type, past which a float
+cannot count outcomes one at a time.
 """
 struct Poisson{L<:Number} <: DiscreteUnivariateMeasure
     λ::L
@@ -116,6 +118,8 @@ _ccdf(::Type{T}, d::Poisson, x::Number) where {T<:AbstractFloat} = _tails(T, d, 
 
 function _quantile(::Type{T}, d::Poisson, q::Number) where {T<:AbstractFloat}
     usable(d) || return convert(T, NaN)
+    # The walk below steps by one, which `T` cannot do past `maxintfloat(T)`.
+    horizon(d) <= maxintfloat(T) || return convert(T, NaN)
     p = convert(T, q)
     hi = convert(T, horizon(d))
     p >= one(T) && return hi

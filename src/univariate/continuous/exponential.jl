@@ -49,9 +49,12 @@ Return the scaled value ``x/\\theta`` for a scale-parameterized measure.
     return select(x >= zero(x), () -> -(s + logt(θ)), () -> oftype(float(s), -Inf))
 end
 
-# Apply `θ` after drawing noise so automatic differentiation can follow it.
+#=
+  Apply `θ` after drawing noise so automatic differentiation can follow it. `log1p(-u)`
+  rather than `log(u)`, so an exact zero draw gives zero, not `Inf`.
+=#
 @inline function Base.rand(rng::AbstractRNG, d::Exponential)
-    e = -log(rand(rng, noisetype(d)))
+    e = -log1p(-rand(rng, noisetype(d)))
     return d.θ * e
 end
 

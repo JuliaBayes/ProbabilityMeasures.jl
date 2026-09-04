@@ -2,6 +2,7 @@ using ProbabilityMeasures
 using ProbabilityMeasures: logt, _promoted_paramtype
 using ProbabilityMeasures: UnivariateMeasure, ContinuousMeasure, DiscreteMeasure
 using ForwardDiff: ForwardDiff
+using Random: Random
 using Test
 
 @testset "traits" begin
@@ -132,4 +133,20 @@ end
     @test Base.broadcastable(d) isa Base.RefValue
     @test logdensityof.(d, xs) == [logdensityof(d, x) for x in xs]
     @test length(logdensityof.([Normal(0.0, 1.0), Normal(1.0, 1.0)], 0.5)) == 2
+end
+
+#=
+  `rand(rng, T)` can return exactly zero. Inverse-CDF samplers built on `log(u)` would
+  return `Inf` there, so they use `log1p(-u)` instead. Cauchy is left out: both ends of
+  its quantile are infinite, so a zero draw is its true quantile.
+=#
+struct ZeroRNG <: Random.AbstractRNG end
+Random.rand(::ZeroRNG, ::Type{T}) where {T<:AbstractFloat} = zero(T)
+
+@testset "samplers survive an exact zero draw" begin
+    for d in (Exponential(2.0), Laplace(1.0, 2.0), Weibull(0.75, 2.5), Geometric(0.3))
+        x = rand(ZeroRNG(), d)
+        @test isfinite(x)
+        @test insupport(d, x)
+    end
 end

@@ -6,7 +6,9 @@ const UNIVARIATE_OPTIONALS = (:cdf, :quantile, :mean, :var, :std, :median, :entr
     Normal(0.0, 1.0), Normal(-2.5, 0.5), Normal(3.0f0, 2.0f0)
 ]
 
-_invalids(::Normal) = (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0))
+function _invalids(::Normal)
+    return (Normal(0.0, -1.0), Normal(0.0, 0.0), Normal(Inf, 1.0), Normal(0.0, Inf))
+end
 _exactparams(::Normal) = Normal(0, 1)
 
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} LogNormal [

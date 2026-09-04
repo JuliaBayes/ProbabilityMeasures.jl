@@ -37,6 +37,8 @@ end
     @test isnan(logdensityof(d, 0.0))
     @test checkparams(Normal(0.0, 1.0))
     @test !checkparams(Normal(Inf, 1.0))
+    @test !checkparams(Normal(0.0, Inf))
+    @test !isfinite(logdensityof(Normal(0.0, Inf), 0.0))
 end
 
 @testset "logcdf beats log(cdf) in the tail" begin

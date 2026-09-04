@@ -67,7 +67,7 @@ end
 @testset "sampling" begin
     d = Weibull(1.5, 2.0)
     seed = 0x4153554b41
-    e = -log(rand(Xoshiro(seed), Float64))
+    e = -log1p(-rand(Xoshiro(seed), Float64))
     @test rand(Xoshiro(seed), d) == 2.0 * e^inv(1.5)
 
     # For `x = θ e^(1/α)`, the derivative in `θ` is `e^(1/α) = x/θ`.
