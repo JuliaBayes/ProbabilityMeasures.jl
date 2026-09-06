@@ -137,38 +137,49 @@ const GAMMAQUANTILE_STEPS = 8
 
 """
     gammaquantile(a, p)
+    gammalogquantile(a, p)
 
-The `p`-quantile of the unit-scale gamma measure with shape `a`, for `0 < p < 1`.
+The `p`-quantile of the unit-scale gamma measure with shape `a`, for `0 < p < 1`, and
+its logarithm, which stays finite where the quantile itself underflows.
 
 Newton's method on `log(x)` refines a closed-form starting point. The logarithm is what
 keeps the deep lower tail, where the quantile itself underflows, from collapsing onto
 zero at the first step. The iteration stops once a step falls below the square root of
 the rounding error, since quadratic convergence puts the next step below the rounding
-error itself. Traced numbers take `GAMMAQUANTILE_STEPS` steps with no value-driven
-control flow instead; see [`wrappedconditions`](@ref).
+error itself, and then takes that one more step so the derivative automatic
+differentiation carries through the iteration is as accurate as the value. Traced
+numbers take `GAMMAQUANTILE_STEPS` steps with no value-driven control flow instead; see
+[`wrappedconditions`](@ref).
 
 Newton solves on whichever tail holds the smaller probability. The other tail is near
 one, where its logarithm is flat and the method has almost no slope to descend. `1 - p`
 is exact above one half, so the split costs no precision.
 """
-function gammaquantile(a::Number, p::Number)
-    fixedlength(a, p) && return gammaquantile_fixed(a, p)
+gammaquantile(a::Number, p::Number) = exp(gammalogquantile(a, p))
+
+function gammalogquantile(a::Number, p::Number)
+    fixedlength(a, p) && return gammalogquantile_fixed(a, p)
     lower = p <= one(p) / 2
     target = lower ? logt(p) : log1p(-p)
     lg = loggamma(a)
     u = gammaquantile_start(a, p)
     tol = sqrt(eps(basefloat(typeof(p))))
     for _ in 1:GAMMAQUANTILE_MAXITER
-        y = exp(u)
-        (isfinite(y) & (y > zero(y))) || break
-        step = gammaquantile_step(a, lg, u, y, lower, target)
+        step = gammaquantile_step(a, lg, u, exp(u), lower, target)
         u -= step
         abs(step) <= tol && break
     end
-    return exp(u)
+    #=
+      The value is now accurate to the rounding error, but the derivative automatic
+      differentiation carries through the iteration lags one step behind. One more step
+      brings it to the same accuracy.
+    =#
+    return u - gammaquantile_step(a, lg, u, exp(u), lower, target)
 end
 
-function gammaquantile_fixed(a::Number, p::Number)
+gammaquantile_fixed(a::Number, p::Number) = exp(gammalogquantile_fixed(a, p))
+
+function gammalogquantile_fixed(a::Number, p::Number)
     lower = p <= one(p) / 2
     target = select(lower, () -> logt(p), () -> log1pt(-p))
     lg = loggamma(a)
@@ -176,7 +187,7 @@ function gammaquantile_fixed(a::Number, p::Number)
     for _ in 1:GAMMAQUANTILE_STEPS
         u -= gammaquantile_step(a, lg, u, exp(u), lower, target)
     end
-    return exp(u)
+    return u
 end
 
 #=
@@ -186,15 +197,15 @@ end
 
   Far from the root the step can overshoot deep into the upper tail, from where Newton
   crawls back one unit of `u` per step, so the step is bounded. A subnormal `y` carries
-  too few digits for the tails to settle, and a zero one gives `NaN`; the quantile is
-  then below the smallest normal number and the current `u` is as good as it gets.
+  too few digits for the tails to settle, and a zero or infinite one gives `NaN`; the
+  quantile is then beyond the normal range and the current `u` is as good as it gets.
 =#
 @inline function gammaquantile_step(a, lg, u, y, lower, target)
     g = muladd(a - one(a), u, -y) - lg
     tail = select(lower, () -> loggammap(a, y), () -> loggammaq(a, y))
     step = (tail - target) * exp(tail - g - u)
     bounded = min(max(step, -2 * one(step)), 2 * one(step))
-    normal = y > oftype(y, floatmin(basefloat(typeof(y))))
+    normal = (y > oftype(y, floatmin(basefloat(typeof(y))))) & isfinite(y)
     safe = select(normal, () -> bounded, () -> zero(bounded))
     return select(lower, () -> safe, () -> -safe)
 end

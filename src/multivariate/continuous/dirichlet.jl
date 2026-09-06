@@ -20,14 +20,10 @@ first `length(α) - 1` entries, which is what Distributions.jl reports as well.
 Density results promote the types of `α` and the evaluation point. Samples use
 `float(eltype(α))`. Density evaluation is linear in `length(α)`.
 
-Sampling breaks the unit interval into pieces: entry `i` takes the fraction of what is
-left that a [`Beta`](@ref) draw with shapes ``\\alpha_i`` and ``\\sum_{j>i} \\alpha_j``
-assigns to it. Every piece comes from inverting a continued fraction, so the whole draw
-is a smooth function of `α` and carries its derivative.
-
-Sampling inherits [`Beta`](@ref)'s differentiation limits: use ForwardDiff or Enzyme,
-not Zygote or Mooncake, which lose the derivative with respect to every shape but the
-first. The density itself differentiates under all of them.
+A draw is a vector of independent gamma draws with shapes `α`, each the quantile of a
+uniform noise value, divided by their sum. The division is done in log space, so small
+shapes do not underflow, and every shape enters through arithmetic, so automatic
+differentiation gives the exact reparameterization gradient.
 
 `cdf`, `quantile`, `median`, and `entropy` in the univariate sense are not defined here.
 Points outside the support, including vectors of the wrong length, have log-density
@@ -40,6 +36,8 @@ end
 # Samples are vectors regardless of how the parameters are stored.
 Base.eltype(::Type{Dirichlet{V}}) where {V} = Vector{float(eltype(V))}
 
+Base.size(d::Dirichlet) = (length(d.α),)
+
 function checkparams(d::Dirichlet)
     isempty(d.α) && return false
     ok = true
@@ -50,6 +48,9 @@ function checkparams(d::Dirichlet)
 end
 
 support(d::Dirichlet) = RealSimplex(length(d.α))
+
+# `loggamma` throws below zero, so evaluate it at one when the parameters are invalid.
+@inline safeshape(valid, α::Number) = select(valid, () -> α, () -> one(α))
 
 """
     logmvbeta(d::Dirichlet, ::Type{T})
@@ -64,12 +65,13 @@ function logmvbeta(d::Dirichlet, ::Type{T}) where {T}
     total = zero(T)
     logb = zero(T)
     for αᵢ in d.α
-        # `loggamma` throws below zero, so call it at one when `α` is invalid.
-        a = pick(valid, convert(T, αᵢ), one(T))
+        a = safeshape(valid, convert(T, αᵢ))
         total += a
         logb += loggamma(a)
     end
-    return pick(valid, logb - loggamma(total), convert(T, NaN))
+    # Copy the loop-assigned values so the closure does not box them.
+    value = logb - loggamma(total)
+    return select(valid, () -> value, () -> convert(T, NaN))
 end
 
 function DensityInterface.logdensityof(d::Dirichlet, x::AbstractVector{<:Number})
@@ -81,35 +83,26 @@ function DensityInterface.logdensityof(d::Dirichlet, x::AbstractVector{<:Number}
     for (αᵢ, xᵢ) in zip(d.α, x)
         logp += xlogyt(convert(T, αᵢ) - one(T), convert(T, xᵢ))
     end
-    return pick(insupport(d, x) & checkparams(d), logp, convert(T, -Inf))
+    value = logp
+    return select(insupport(d, x) & checkparams(d), () -> value, () -> convert(T, -Inf))
 end
 
 #=
-  Break the unit interval into pieces. Entry `i` takes the fraction of the remaining
-  stick that a `Beta(αᵢ, Σ_{j>i} αⱼ)` draw assigns to it, which leaves the entries
-  Dirichlet distributed and each one differentiable in `α`.
+  Normalized gamma draws are Dirichlet distributed. Working with the log quantiles
+  keeps a small shape from underflowing, and `map` rather than a filled vector keeps
+  reverse-mode backends, which reject array mutation, on the same path.
 =#
 function Base.rand(rng::AbstractRNG, d::Dirichlet)
     T = eltype(eltype(d))
-    tail = zero(T)
-    for αᵢ in d.α
-        tail += convert(T, αᵢ)
+    F = basefloat(T)
+    valid = checkparams(d)
+    logs = map(d.α) do αᵢ
+        a = convert(T, αᵢ)
+        return select(valid, () -> gammalogquantile(a, rand(rng, F)), () -> convert(T, NaN))
     end
-    #=
-      Grow the vector rather than fill one in place: reverse-mode backends reject array
-      mutation, as they do in `MvNormal`'s whitening.
-    =#
-    x = T[]
-    remaining = one(T)
-    for i in firstindex(d.α):(lastindex(d.α) - 1)
-        αᵢ = convert(T, d.α[i])
-        tail -= αᵢ
-        piece = remaining * rand(rng, Beta(αᵢ, tail))
-        x = vcat(x, piece)
-        remaining -= piece
-    end
-    # The final entry is whatever the earlier ones left, so the draw sums to one.
-    return vcat(x, remaining)
+    shift = maximum(logs)
+    w = exp.(logs .- shift)
+    return w ./ sum(w)
 end
 
 Statistics.mean(d::Dirichlet) = d.α ./ sum(d.α)
@@ -137,13 +130,14 @@ function entropy(d::Dirichlet)
         total += convert(T, αᵢ)
     end
     valid = checkparams(d)
-    a0 = pick(valid, total, one(T))
+    a0 = safeshape(valid, total)
     h = logmvbeta(d, T) + (a0 - convert(T, length(d.α))) * digamma(a0)
     for αᵢ in d.α
-        a = pick(valid, convert(T, αᵢ), one(T))
+        a = safeshape(valid, convert(T, αᵢ))
         h -= (a - one(T)) * digamma(a)
     end
-    return pick(valid, h, convert(T, NaN))
+    value = h
+    return select(valid, () -> value, () -> convert(T, NaN))
 end
 
 function Base.show(io::IO, d::Dirichlet)

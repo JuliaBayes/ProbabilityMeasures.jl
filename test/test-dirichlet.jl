@@ -1,6 +1,5 @@
 using ProbabilityMeasures
 using ProbabilityMeasuresTest: test_measure
-using DifferentiationInterface: AutoForwardDiff
 using Distributions: Distributions
 using ForwardDiff: ForwardDiff
 using LinearAlgebra: diag
@@ -16,21 +15,33 @@ reference(d) = Distributions.Dirichlet(Float64.(d.α))
       A one-entry measure is left out: its only draw is `[1.0]` whatever the shape, so
       the suite's sample-derivative check has nothing to find. It is covered below.
     =#
-    #=
-      Sampling goes through `Beta`'s quantile, so the same backends apply: Zygote and
-      Mooncake differentiate `SpecialFunctions.beta_inc` and lose the derivative with
-      respect to every shape but the first.
-    =#
-    for d in (
-        Dirichlet([2.0, 3.0, 5.0]), Dirichlet([1.0, 1.0]), Dirichlet(Float32[0.5, 1.5, 2.0])
-    )
-        test_measure(
-            d;
-            name=string(d),
-            reference_logpdf=reference_logpdf,
-            ad_backends=(AutoForwardDiff(),),
-        )
+    for d in (Dirichlet([2.0, 3.0, 5.0]), Dirichlet([1.0, 1.0]))
+        test_measure(d; name=string(d), reference_logpdf=reference_logpdf)
     end
+    #=
+      The suite checks the sample derivative against finite differences taken in the
+      parameter type. In `Float32` a three-component draw carries too much rounding for a
+      five-point stencil to resolve `1e-5`, so that check is made against `Float64` below.
+    =#
+    d32 = Dirichlet(Float32[0.5, 1.5, 2.0])
+    test_measure(d32; name=string(d32), reference_logpdf=reference_logpdf, check_ad=false)
+end
+
+@testset "the Float32 sample derivative matches Float64" begin
+    #=
+      `rand(rng, Float32)` and `rand(rng, Float64)` take their bits from the same words
+      of the stream, so the two measures see the same noise to `Float32` precision and
+      their derivatives at fixed seed agree to the same order.
+    =#
+    α = Float32[0.5, 1.5, 2.0]
+    J32 = ForwardDiff.jacobian(p -> rand(Xoshiro(7), Dirichlet(p)), α)
+    J64 = ForwardDiff.jacobian(p -> rand(Xoshiro(7), Dirichlet(p)), Float64.(α))
+    @test J32 ≈ J64 rtol = 1e-4
+    g32 = ForwardDiff.gradient(p -> logdensityof(Dirichlet(p), Float32[0.2, 0.3, 0.5]), α)
+    g64 = ForwardDiff.gradient(
+        p -> logdensityof(Dirichlet(p), [0.2, 0.3, 0.5]), Float64.(α)
+    )
+    @test g32 ≈ g64 rtol = 1e-5
 end
 
 @testset "traits and construction" begin
@@ -147,7 +158,8 @@ end
 end
 
 @testset "draws stay on the simplex" begin
-    for α in ([2.0, 3.0, 5.0], [0.5, 1.5, 2.0], [1.0, 1.0], [100.0, 0.01])
+    for α in
+        ([2.0, 3.0, 5.0], [0.5, 1.5, 2.0], [1.0, 1.0], [100.0, 0.01], [0.01, 0.02, 0.01])
         d = Dirichlet(α)
         draws = [rand(Xoshiro(seed), d) for seed in 1:200]
         @test all(x -> insupport(d, x), draws)
@@ -156,14 +168,22 @@ end
     end
 end
 
-@testset "sample derivative is not zero" begin
-    # Every piece of the stick comes from inverting a continued fraction, so the draw
-    # is a smooth function of the shapes.
-    g = ForwardDiff.jacobian(p -> rand(Xoshiro(7), Dirichlet(p)), [2.0, 3.0, 5.0])
+@testset "the sample derivative is the reparameterization gradient" begin
+    α = [2.0, 3.0, 5.0]
+    g = ForwardDiff.jacobian(p -> rand(Xoshiro(7), Dirichlet(p)), α)
     @test all(isfinite, g)
-    @test any(!iszero, g)
-    # The entries sum to one whatever the shapes, so each row of the change sums to zero.
+    # The entries sum to one whatever the shapes, so each column of the change sums to zero.
     @test all(≈(0; atol=1e-12), sum(g; dims=1))
+
+    # At fixed noise the derivative averages to that of the mean, `α / sum(α)`.
+    n = 20_000
+    J = zeros(3, 3)
+    for seed in 1:n
+        J .+= ForwardDiff.jacobian(p -> rand(Xoshiro(seed), Dirichlet(p)), α)
+    end
+    total = sum(α)
+    exact = [((i == j) * total - α[i]) / total^2 for i in 1:3, j in 1:3]
+    @test J ./ n ≈ exact atol = 0.005
 end
 
 @testset "sampling" begin

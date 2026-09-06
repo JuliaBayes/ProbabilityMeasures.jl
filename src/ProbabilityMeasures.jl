@@ -16,14 +16,14 @@ using IrrationalConstants: invsqrt2, log2π, logπ, logtwo, sqrt2
 using LinearAlgebra: Diagonal, LowerTriangular, UniformScaling
 using Random: Random, AbstractRNG
 using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
-using SpecialFunctions:
-    beta_inc, beta_inc_inv, digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
+using SpecialFunctions: digamma, erfc, erfcinv, gamma_inc, logerfc, loggamma
 using Statistics: Statistics, cov, mean, median, quantile, std, var
 using StatsAPI: StatsAPI, params
 
 include("core/types.jl")
 include("core/mathfuns.jl")
 include("core/gammainc.jl")
+include("core/betainc.jl")
 include("core/support.jl")
 include("core/interface.jl")
 

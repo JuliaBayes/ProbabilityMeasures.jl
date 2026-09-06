@@ -141,6 +141,13 @@ end
   guess at where to truncate it. `tiny` replaces a denominator that rounds to zero,
   which is what lets the recurrence step past a vanishing partial numerator. Its square
   is still a normal number, so differentiating through the guard gives zero, not `NaN`.
+
+  At an integer shape the partial numerator `aᵢ` is exactly zero once `i` reaches the
+  shape, and the fraction terminates: its value is exact, and every later factor is one.
+  The derivative with respect to the shape is not settled there, since the terms behind
+  the zero still move with it, so the loop runs on for a term per bit of precision, which
+  the tail's geometric convergence turns into full accuracy. The zero is detected with
+  `<`, which for a dual number compares the value alone; `==` and `<=` do not.
 =#
 function gammaq_cf(a::Number, x::Number)
     F = basefloat(typeof(x))
@@ -150,8 +157,10 @@ function gammaq_cf(a::Number, x::Number)
     c = oftype(x, inv(sqrt(floatmin(F))))
     d = inv(b)
     h = inv(b)
+    zeroed = 0
     for i in 1:GAMMAINC_MAXITER
         an = -i * (i - a)
+        (zeroed == 0) & (abs(an) < tiny) && (zeroed = i)
         b += 2 * one(x)
         d = an * d + b
         abs(d) < tiny && (d = tiny)
@@ -160,7 +169,8 @@ function gammaq_cf(a::Number, x::Number)
         d = inv(d)
         delta = d * c
         h *= delta
-        abs(delta - one(delta)) <= tol && break
+        settled = abs(delta - one(delta)) <= tol
+        settled & ((zeroed == 0) | (i >= zeroed + precision(F))) && break
     end
     return muladd(a, logt(x), -x) - loggamma(a) + logt(h)
 end

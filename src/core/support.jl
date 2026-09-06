@@ -125,7 +125,15 @@ end
 "The unit interval, ``[0, 1]``."
 struct UnitInterval <: Support end
 
-insupport(::UnitInterval, x::Number) = isfinite(x) & (x >= zero(x)) & (x <= one(x))
+#=
+  The upper bound is tested as `1 - x >= 0` rather than `x <= 1`. A density on the
+  interval takes `log(1 - x)`, whose guard compares `1 - x` with zero, and Reactant's
+  pass pipeline misplaces the negation it builds when it meets that guard's complement
+  written as `x <= 1`. Testing the same quantity in both places avoids the rewrite.
+=#
+function insupport(::UnitInterval, x::Number)
+    return isfinite(x) & (x >= zero(x)) & (one(x) - x >= zero(x))
+end
 
 Base.minimum(::UnitInterval) = 0.0
 Base.maximum(::UnitInterval) = 1.0

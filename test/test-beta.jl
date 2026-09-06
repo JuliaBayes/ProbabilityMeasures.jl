@@ -1,33 +1,18 @@
 using ProbabilityMeasures
 using ProbabilityMeasuresTest: test_measure
-using DifferentiationInterface: AutoForwardDiff
 using Distributions: Distributions
 using ForwardDiff: ForwardDiff
 using QuadGK: quadgk
 using Random: Random, Xoshiro
+using SpecialFunctions: trigamma
 using Test
 
 reference(d) = Distributions.Beta(d.α, d.β)
 
 @testset "conformance" begin
     reference_logpdf(m, x) = Distributions.logpdf(reference(m), x)
-    #=
-      Two blocks of the suite are off. `rand` reaches `SpecialFunctions.beta_inc`,
-      whose asymptotic branches allocate, so the allocation check cannot run; the
-      density is checked on its own below. Only ForwardDiff is swept because Zygote and
-      Mooncake rewrite Julia source rather than wrap numeric types, so they reach
-      `beta_inc`, which carries no ChainRules rule and hands back a zero derivative with
-      respect to the second shape. ReverseDiff is correct here but is left out so the
-      swept set matches the documented support.
-    =#
     for d in (Beta(2.0, 3.0), Beta(1.0, 1.0), Beta(0.5, 0.5), Beta(2.0f0, 5.0f0))
-        test_measure(
-            d;
-            name=string(d),
-            reference_logpdf=reference_logpdf,
-            check_allocations=false,
-            ad_backends=(AutoForwardDiff(),),
-        )
+        test_measure(d; name=string(d), reference_logpdf=reference_logpdf)
     end
 end
 
@@ -149,22 +134,26 @@ end
     @test quantile(d, 1.0) == 1.0
 end
 
-#=
-  A `Dual` is `Real` but not one of the `BetaTailFloat` types, so it takes the continued
-  fraction while a plain float reaches `SpecialFunctions.beta_inc`. Their values have to
-  agree.
-=#
-@testset "both paths agree" begin
-    # A `Dual` argument sends the call down the continued fraction.
-    fraction(f, d, x) = ForwardDiff.value(f(d, ForwardDiff.Dual(x, 1.0)))
-    for (α, β) in ((2.0, 3.0), (1.0, 1.0), (0.5, 0.5), (5.0, 1.0), (7.0, 11.0))
-        d = Beta(α, β)
-        for x in 0.02:0.02:0.98
-            @test fraction(cdf, d, x) ≈ cdf(d, x) atol = 1e-12
-            @test fraction(ccdf, d, x) ≈ ccdf(d, x) atol = 1e-12
+@testset "the fixed-length path matches the converging one" begin
+    # Both tails, on both sides of the crossover.
+    for a in (0.1, 1.0, 7.5, 100.0, 1000.0), b in (0.5, 3.0, 300.0)
+        for x in (1e-6, 0.1, 0.5, 0.9, 1 - 1e-6)
+            lp, lq = ProbabilityMeasures.logbetainc(a, b, x, 1 - x)
+            sp, sq = ProbabilityMeasures.logbetainc_fixed(a, b, x, 1 - x)
+            @test sp ≈ lp atol = 1e-12 rtol = 1e-12
+            @test sq ≈ lq atol = 1e-12 rtol = 1e-12
         end
-        for q in (0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99)
-            @test fraction(quantile, d, q) ≈ quantile(d, q) atol = 1e-10
+    end
+
+    # The fixed number of Newton steps reaches the converging answer for every noise value.
+    # With plain floats the steps still call the converging tails; the composition with
+    # the fixed tails runs under Reactant in `test/reactant`.
+    rng = Xoshiro(3)
+    for (a, b) in ((0.05, 3.0), (0.5, 0.5), (2.0, 3.0), (100.0, 0.3), (300.0, 500.0))
+        for _ in 1:1_000
+            p = rand(rng)
+            @test ProbabilityMeasures.betaquantile_fixed(a, b, p) ≈
+                ProbabilityMeasures.betaquantile(a, b, p) rtol = 1e-11
         end
     end
 end
@@ -177,7 +166,6 @@ end
         @test quantile(d, T(1) / 4) isa T
         @test rand(Xoshiro(1), d) isa T
     end
-    # `beta_inc` has no `BigFloat` method, so this value comes from the fraction.
     widened = cdf(Beta(big"2.0", big"3.0"), big"0.25")
     @test widened ≈ cdf(Beta(2.0, 3.0), 0.25) atol = 1e-14
 end
@@ -200,29 +188,27 @@ end
     end
 end
 
-@testset "sample derivative is not zero" begin
-    # A draw is the quantile of a uniform draw, so it moves with both shapes.
-    for (α, β) in ((2.0, 3.0), (0.5, 0.5), (7.0, 11.0))
-        g = ForwardDiff.gradient(p -> rand(Xoshiro(7), Beta(p[1], p[2])), [α, β])
-        @test all(isfinite, g)
-        @test any(!iszero, g)
+@testset "the sample derivative is the reparameterization gradient" begin
+    #=
+      A draw is a smooth function of the noise and the shapes, so its derivative at fixed
+      noise averages to the derivative of the mean, `β / (α + β)²`, and its log to the
+      derivative of `E[log x] = ψ(α) - ψ(α + β)`.
+    =#
+    n = 100_000
+    for (α, β) in ((0.5, 0.5), (2.0, 3.0), (0.05, 3.0))
+        rng = Xoshiro(7)
+        dmean, dlog = 0.0, 0.0
+        for _ in 1:n
+            seed = rand(rng, UInt)
+            f = a -> rand(Xoshiro(seed), Beta(a, β))
+            x = f(α)
+            dx = ForwardDiff.derivative(f, α)
+            dmean += dx
+            dlog += dx / x
+        end
+        @test dmean / n ≈ β / (α + β)^2 rtol = 0.03
+        @test dlog / n ≈ trigamma(α) - trigamma(α + β) rtol = 0.03
     end
-
-    # A draw is exactly that quantile.
-    for seed in 1:20
-        u = rand(Xoshiro(seed), Float64)
-        @test rand(Xoshiro(seed), Beta(2.0, 3.0)) === quantile(Beta(2.0, 3.0), u)
-    end
-end
-
-#=
-  The suite's allocation check is off for `Beta`, so cover the density here. `rand` is
-  left out on purpose: it reaches `beta_inc`, which allocates.
-=#
-@testset "the density does not allocate" begin
-    d, x = Beta(2.0, 3.0), 0.25
-    logdensityof(d, x) # compile first
-    @test (@allocated logdensityof(d, x)) == 0
 end
 
 @testset "sampling" begin
@@ -239,4 +225,14 @@ end
     @test all(x -> insupport(d, x), draws)
     @test mean(draws) ≈ mean(d) atol = 5 * std(d) / sqrt(100_000)
     @test var(draws) ≈ var(d) rtol = 0.02
+
+    # Tiny shapes put nearly all the mass at the endpoints; the log-space ratio keeps
+    # every draw finite and on the interval.
+    small = rand(Xoshiro(1), Beta(0.01, 0.02), 10_000)
+    @test all(x -> insupport(Beta(0.01, 0.02), x), small)
+
+    # Invalid parameters give `NaN` rather than throwing.
+    for m in (Beta(-1.0, 1.0), Beta(NaN, 1.0), Beta(1.0, 0.0))
+        @test isnan(rand(Xoshiro(1), m))
+    end
 end

@@ -19,16 +19,6 @@ every value-driven branch. It is false for every type Base knows; the Reactant e
 sets it for traced numbers.
 """
 wrappedconditions(::Type) = false
-    pick(cond, iftrue, iffalse)
-
-[`select`](@ref) between two values that are already computed.
-
-Both values are evaluated whatever `cond` is, so use this only where evaluating both is
-safe and cheap. Passing them as arguments also keeps them out of the caller's closures:
-a captured variable that a loop reassigns is boxed, which costs inference and an
-allocation.
-"""
-@inline pick(cond, iftrue, iffalse) = select(cond, () -> iftrue, () -> iffalse)
 
 """
     logt(x)
@@ -119,8 +109,8 @@ log-gamma calls here can.
 @inline function logbetat(α::Number, β::Number)
     valid = (α > zero(α)) & (β > zero(β))
     # `loggamma` throws below zero, so call it at one when the arguments are invalid.
-    a = pick(valid, α, one(α))
-    b = pick(valid, β, one(β))
+    a = select(valid, () -> α, () -> one(α))
+    b = select(valid, () -> β, () -> one(β))
     v = loggamma(a) + loggamma(b) - loggamma(a + b)
-    return pick(valid, v, oftype(v, NaN))
+    return select(valid, () -> v, () -> oftype(v, NaN))
 end
