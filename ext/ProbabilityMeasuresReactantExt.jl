@@ -16,6 +16,22 @@ end
 # once Reactant provides it.
 Base.float(::Type{TracedRNumber{T}}) where {T} = TracedRNumber{float(T)}
 
+# A traced trial count is a `Number` but not an `Integer`, so the plain constructors
+# reject it. These keep the log-density usable inside a Reactant trace.
+function ProbabilityMeasures.BetaBinomial(n::TracedRNumber{<:Integer}, α::Number, β::Number)
+    return ProbabilityMeasures.BetaBinomial{typeof(n),typeof(α),typeof(β)}(n, α, β)
+end
+
+function ProbabilityMeasures.BetaBinomialLogit(
+    n::TracedRNumber{<:Integer}, η::Number, ϕ::Number
+)
+    return ProbabilityMeasures.BetaBinomialLogit{typeof(n),typeof(η),typeof(ϕ)}(n, η, ϕ)
+end
+
+function ProbabilityMeasures.IntegerRange(a::Integer, b::TracedRNumber{<:Integer})
+    return ProbabilityMeasures.IntegerRange{typeof(a),typeof(b)}(a, b)
+end
+
 # Reactant evaluates both choices, so each must be safe to call.
 @inline function ProbabilityMeasures.select(cond::TracedRNumber{Bool}, iftrue, iffalse)
     return ifelse(cond, iftrue(), iffalse())

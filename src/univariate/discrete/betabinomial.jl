@@ -23,7 +23,9 @@ mass evenly over the support, and large ``\\alpha + \\beta`` approaches
   - `α::Number`: the first shape, positive.
   - `β::Number`: the second shape, positive.
 
-`n` stays an integer because it sets the support and loop lengths. The result type
+`n` must be an integer for plain numbers. A traced number (Reactant) is also accepted;
+the log-density then works, but sampling, entropy, CDFs and quantiles loop over `0:n`
+and need a plain integer. The result type
 follows the shapes and the value being evaluated. Samples use
 `float(promote_type(typeof(α), typeof(β)))`.
 
@@ -51,11 +53,13 @@ checkparams(BetaBinomial(3, -1.0, 2.0))               # false
 isnan(logdensityof(BetaBinomial(3, -1.0, 2.0), 1.0))  # true
 ```
 """
-struct BetaBinomial{N<:Integer,A<:Number,B<:Number} <: DiscreteUnivariateMeasure
+struct BetaBinomial{N<:Number,A<:Number,B<:Number} <: DiscreteUnivariateMeasure
     n::N
     α::A
     β::B
 end
+
+BetaBinomial(n::Integer, α::Number, β::Number) = BetaBinomial{typeof(n),typeof(α),typeof(β)}(n, α, β)
 
 Base.eltype(::Type{BetaBinomial{N,A,B}}) where {N,A,B} = float(promote_type(A, B))
 
@@ -126,7 +130,9 @@ and free to vary, while `ϕ` carries the overdispersion on its own.
   - `η::Number`: the logit of the mean success probability.
   - `ϕ::Number`: the precision, positive.
 
-`n` stays an integer because it sets the support and loop lengths. The result type
+`n` must be an integer for plain numbers. A traced number (Reactant) is also accepted;
+the log-density then works, but sampling, entropy, CDFs and quantiles loop over `0:n`
+and need a plain integer. The result type
 follows `η`, `ϕ`, and the value being evaluated. Samples use
 `float(promote_type(typeof(η), typeof(ϕ)))`.
 
@@ -146,11 +152,13 @@ checkparams(BetaBinomialLogit(3, 800.0, 1.0))               # false, `β` is zer
 isnan(logdensityof(BetaBinomialLogit(3, 800.0, 1.0), 1.0))  # true
 ```
 """
-struct BetaBinomialLogit{N<:Integer,H<:Number,P<:Number} <: DiscreteUnivariateMeasure
+struct BetaBinomialLogit{N<:Number,H<:Number,P<:Number} <: DiscreteUnivariateMeasure
     n::N
     η::H
     ϕ::P
 end
+
+BetaBinomialLogit(n::Integer, η::Number, ϕ::Number) = BetaBinomialLogit{typeof(n),typeof(η),typeof(ϕ)}(n, η, ϕ)
 
 Base.eltype(::Type{BetaBinomialLogit{N,H,P}}) where {N,H,P} = float(promote_type(H, P))
 
