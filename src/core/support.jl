@@ -69,10 +69,12 @@ The consecutive integers ``\\{a, a+1, \\ldots, b\\}``.
 
 `b < a` describes the empty set.
 """
-struct IntegerRange{A<:Integer,B<:Integer} <: Support
+struct IntegerRange{A<:Number,B<:Number} <: Support
     a::A
     b::B
 end
+
+IntegerRange(a::Integer, b::Integer) = IntegerRange{typeof(a),typeof(b)}(a, b)
 
 insupport(s::IntegerRange, x::Number) = isinteger(x) & (x >= s.a) & (x <= s.b)
 

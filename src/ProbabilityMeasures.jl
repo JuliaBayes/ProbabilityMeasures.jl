@@ -37,6 +37,7 @@ include("univariate/continuous/gamma.jl")
 include("univariate/discrete/categorical.jl")
 include("univariate/discrete/bernoulli.jl")
 include("univariate/discrete/binomial.jl")
+include("univariate/discrete/betabinomial.jl")
 include("univariate/discrete/poisson.jl")
 include("univariate/discrete/geometric.jl")
 
@@ -85,6 +86,8 @@ export Gamma
 export Categorical
 export Bernoulli
 export Binomial
+export BetaBinomial
+export BetaBinomialLogit
 export Poisson
 export Geometric
 export MvNormal

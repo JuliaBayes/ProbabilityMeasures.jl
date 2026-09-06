@@ -67,6 +67,39 @@ When invalid parameters make `a > 0`, `logt` returns `NaN` instead of throwing.
 end
 
 """
+    logistic(x)
+
+The logistic function ``1/(1 + e^{-x})``.
+
+It saturates instead of throwing or overflowing: once `exp(-x)` overflows, past `|x|`
+of about `709` in `Float64` and `88` in `Float32`, the result is exactly one or exactly
+zero.
+"""
+@inline logistic(x::Number) = inv(one(x) + exp(-x))
+
+"""
+    logbetat(a, b)
+
+Compute ``\\log B(a, b)``, returning `NaN` instead of throwing for a non-positive
+argument.
+
+`loggamma` throws for a negative non-integer, so a measure with an invalid shape would
+otherwise raise a `DomainError` rather than return a non-finite density.
+
+The arguments are typed separately: the numbers a reverse-mode tape produces need not
+share a type with the ones it was given.
+"""
+@inline function logbetat(a::Number, b::Number)
+    positive = (a > zero(a)) & (b > zero(b))
+    # Some tools evaluate both choices, so call `loggamma` only with valid arguments.
+    return select(
+        positive,
+        () -> loggamma(a) + loggamma(b) - loggamma(a + b),
+        () -> oftype(float(a + b), NaN),
+    )
+end
+
+"""
     basefloat(T) -> Type{<:AbstractFloat}
 
 The plain floating-point type inside `T`.

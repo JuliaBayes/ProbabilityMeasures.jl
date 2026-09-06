@@ -124,12 +124,59 @@ _exactparams(d::Binomial) = Binomial(d.n, 1//2)
 # Use outcomes with distinct CDF values. Once rounding makes the CDF equal one,
 # quantile cannot recover later outcomes. Keep the last outcome because quantile maps
 # a probability of one to it directly.
-function default_testpoints(d::Binomial)
+function _invertible_outcomes(d)
     cs = [cdf(d, float(k)) for k in 0:(d.n)]
     separated(k) = cs[k + 1] > (k == 0 ? zero(eltype(cs)) : cs[k])
     invertible(k) = k == d.n || (separated(k) && cs[k + 1] < one(eltype(cs)))
     return [float(k) for k in 0:(d.n) if invertible(k)]
 end
+
+default_testpoints(d::Binomial) = _invertible_outcomes(d)
+
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} BetaBinomial [
+    BetaBinomial(1, 1.0, 1.0), BetaBinomial(5, 2.0, 3.0), BetaBinomial(4, 0.5f0, 1.5f0)
+]
+
+# The trial count sets the support and loop lengths.
+_structural(::BetaBinomial) = (:n,)
+
+# Keep the original trial count so the test points remain in the support. Every one of
+# these is non-finite across the whole support.
+function _invalids(d::BetaBinomial)
+    return (
+        BetaBinomial(-one(d.n), d.α, d.β),
+        BetaBinomial(d.n, -d.α, d.β),
+        BetaBinomial(d.n, d.α, zero(d.β)),
+    )
+end
+
+# Use exact integer shapes while leaving the trial count unchanged.
+_exactparams(d::BetaBinomial) = BetaBinomial(d.n, 2, 3)
+
+default_testpoints(d::BetaBinomial) = _invertible_outcomes(d)
+
+@implements MeasureInterface{UNIVARIATE_OPTIONALS} BetaBinomialLogit [
+    BetaBinomialLogit(1, 0.0, 2.0),
+    BetaBinomialLogit(5, 0.4, 4.0),
+    BetaBinomialLogit(4, -0.5f0, 3.0f0),
+]
+
+# The trial count sets the support and loop lengths.
+_structural(::BetaBinomialLogit) = (:n,)
+
+# The last of these overflows `exp(η)`, which leaves one implied shape at zero.
+function _invalids(d::BetaBinomialLogit)
+    return (
+        BetaBinomialLogit(-one(d.n), d.η, d.ϕ),
+        BetaBinomialLogit(d.n, d.η, -d.ϕ),
+        BetaBinomialLogit(d.n, oftype(d.η, 800), d.ϕ),
+    )
+end
+
+# Use an exact logit and precision while leaving the trial count unchanged.
+_exactparams(d::BetaBinomialLogit) = BetaBinomialLogit(d.n, 1, 4)
+
+default_testpoints(d::BetaBinomialLogit) = _invertible_outcomes(d)
 
 @implements MeasureInterface{UNIVARIATE_OPTIONALS} Poisson [
     Poisson(0.5), Poisson(4.0), Poisson(2.5f0)
