@@ -12,7 +12,8 @@ broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
 `Exponential`, `Weibull`, `Gamma`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`,
-`Bernoulli`, `Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
+`Bernoulli`, `Binomial`, `BetaBinomial`, `BetaBinomialLogit`, `Poisson`, `Geometric`,
+`MvNormal`, and `Multinomial`.
 
 ## Installation
 
@@ -63,7 +64,8 @@ than throwing.
 
 `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Weibull(α, θ)`, `Gamma(α, θ)`,
 `Uniform(a, b)`, `Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`, `Bernoulli(p)`,
-`Binomial(n, p)`, `Poisson(λ)`, and `Geometric(p)` each support:
+`Binomial(n, p)`, `BetaBinomial(n, α, β)`, `BetaBinomialLogit(n, η, ϕ)`, `Poisson(λ)`,
+and `Geometric(p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -81,6 +83,23 @@ changing the result, so `BigFloat` keeps its precision and differentiation tools
 the iteration. Under Reactant they run a fixed number of terms instead, exact for shapes
 up to about `900` in `Float64`. Sampling inverts the CDF, so derivatives of a draw with
 respect to `α` and `θ` are exact.
+
+`BetaBinomial(n, α, β)` counts successes in `n` trials that share one success
+probability drawn from a beta measure. The shared draw correlates the trials, so the
+variance exceeds a binomial's with the same mean:
+
+```julia
+julia> mean(BetaBinomial(10, 2.0, 2.0)), var(BetaBinomial(10, 2.0, 2.0))
+(5.0, 7.0)
+
+julia> mean(Binomial(10, 0.5)), var(Binomial(10, 0.5))
+(5.0, 2.5)
+```
+
+`BetaBinomialLogit(n, η, ϕ)` is the same measure with the logit of the mean success
+probability and a precision in place of the two shapes: `α = ϕ / (1 + exp(-η))` and
+`β = ϕ / (1 + exp(η))`, so the shapes sum to `ϕ`. This is the form a regression uses,
+with `η` the linear predictor and `ϕ` carrying the overdispersion on its own.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -215,8 +234,9 @@ See the [contribution guide](docs/src/90-contributing.md) for contribution guide
 
 ProbabilityMeasures.jl currently contains `Normal`, `LogNormal`, `Exponential`,
 `Weibull`, `Gamma`, `Uniform`, `Cauchy`, `Laplace`, `Categorical`, `Bernoulli`,
-`Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`. Transformed or
-composite measures and Distributions.jl interoperability are not implemented yet.
+`Binomial`, `BetaBinomial`, `BetaBinomialLogit`, `Poisson`, `Geometric`, `MvNormal`,
+and `Multinomial`. Transformed or composite measures and Distributions.jl
+interoperability are not implemented yet.
 
 ## Citation
 

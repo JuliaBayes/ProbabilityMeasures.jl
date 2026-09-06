@@ -70,6 +70,21 @@ and this project adheres to [Semantic Versioning].
   `BigFloat` keeps its precision and differentiation tools follow the iteration. Sampling
   inverts the CDF, so the derivative of a draw with respect to either parameter is the
   exact reparameterization gradient, at the cost of a Newton solve per draw.
+- `BetaBinomial(n, α, β)` and `BetaBinomialLogit(n, η, ϕ)`, two parameterizations of one
+  measure: the successes in `n` trials that share a single success probability drawn
+  from a beta measure. The shared draw correlates the trials, so the variance exceeds a
+  binomial's with the same mean, by `(α + β + n) / (α + β + 1)`. `BetaBinomialLogit`
+  replaces the shapes with the logit of the mean and a precision, `α = ϕ * logistic(η)`
+  and `β = ϕ * logistic(-η)`, which is the form a regression uses. Both share the
+  log-density and the fixed-length loops over the support behind entropy, the CDFs and
+  the quantile, so both are traceable and GPU-safe. Sampling inverts the CDF: the shared
+  probability rules out summing independent trials the way `Binomial` does.
+
+  The log-density is a difference of `loggamma` terms of order `n log n`, so its relative
+  accuracy falls off roughly in proportion to `n`: about `3e-13` at `n = 1000` and `2e-9`
+  at `n = 10^7` in `Float64`. `BetaBinomialLogit`'s `checkparams` tests the implied shapes
+  rather than `η` and `ϕ`, so it also rejects an `η` past `±709` in `Float64` or `±88` in
+  `Float32`, where `exp(η)` overflows and one shape becomes zero.
 - `wrappedconditions(T)`, a trait for numbers whose comparisons are not a `Bool`. The
   Reactant extension sets it for traced numbers, and `Gamma`'s loops then run a fixed
   number of terms with `select` in place of every value-driven branch, so the same code
