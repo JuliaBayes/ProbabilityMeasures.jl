@@ -1,8 +1,10 @@
 module ProbabilityMeasuresReactantExt
 
 using ProbabilityMeasures: ProbabilityMeasures
-using ProbabilityMeasures: GAMMAINC_TERMS, GAMMAQUANTILE_STEPS, basefloat, floortiny
-using ProbabilityMeasures: gammaquantile_start, gammaquantile_step, log1pt, logt, select
+using ProbabilityMeasures: BETAINC_TERMS, BETAQUANTILE_STEPS, GAMMAINC_TERMS
+using ProbabilityMeasures: GAMMAQUANTILE_STEPS, basefloat, floortiny, log1pt, logt, select
+using ProbabilityMeasures: betaquantile_start, betaquantile_step, logbetat, logistic
+using ProbabilityMeasures: gammaquantile_start, gammaquantile_step
 using Reactant: Reactant, TracedRNumber, @trace
 using SpecialFunctions: SpecialFunctions, loggamma
 
@@ -59,7 +61,7 @@ function ProbabilityMeasures.gammaq_cf_fixed(a::T, x::T) where {T<:TracedRNumber
     return muladd(a, logt(x), -x) - loggamma(a) + logt(h)
 end
 
-function ProbabilityMeasures.gammaquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
+function ProbabilityMeasures.gammalogquantile_fixed(a::T, p::T) where {T<:TracedRNumber}
     lower = p <= one(T) / 2
     target = select(lower, () -> logt(p), () -> log1pt(-p))
     lg = loggamma(a)
@@ -67,7 +69,40 @@ function ProbabilityMeasures.gammaquantile_fixed(a::T, p::T) where {T<:TracedRNu
     @trace for k in 1:GAMMAQUANTILE_STEPS
         u = u - gammaquantile_step(a, lg, u, exp(u), lower, target)
     end
-    return exp(u)
+    return u
+end
+
+function ProbabilityMeasures.betainc_cf_fixed(a::T, b::T, x::T) where {T<:TracedRNumber}
+    F = basefloat(T)
+    tiny = convert(T, sqrt(floatmin(F)))
+    unit = one(T)
+    qab, qap, qam = a + b, a + one(T), a - one(T)
+    c = one(T)
+    d = inv(floortiny(one(T) - qab * x / qap, tiny))
+    h = inv(floortiny(one(T) - qab * x / qap, tiny))
+    @trace for m in 1:BETAINC_TERMS
+        m2 = 2m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = inv(floortiny(unit + aa * d, tiny))
+        c = floortiny(unit + aa / c, tiny)
+        h = h * (d * c)
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = inv(floortiny(unit + aa * d, tiny))
+        c = floortiny(unit + aa / c, tiny)
+        h = h * (d * c)
+    end
+    return h
+end
+
+function ProbabilityMeasures.betaquantile_fixed(a::T, b::T, p::T) where {T<:TracedRNumber}
+    lower = p <= one(T) / 2
+    target = select(lower, () -> logt(p), () -> log1pt(-p))
+    lb = logbetat(a, b)
+    v = betaquantile_start(a, b, p)
+    @trace for k in 1:BETAQUANTILE_STEPS
+        v = v - betaquantile_step(a, b, lb, v, lower, target)
+    end
+    return logistic(v)
 end
 
 # Reactant exposes the underlying operation but not these SpecialFunctions methods.

@@ -12,9 +12,8 @@ and this project adheres to [Semantic Versioning].
 - `AbstractProbabilityMeasure{F,S}` and the normalized-only measure interface:
   `logdensityof`, `rand`, `support`, `insupport`, `params`, `checkparams`, `size` (the
   shape of a draw, `()` or `(n,)`), and the moment/distribution-function surface.
-- The `RealLine`, `NonNegativeReals`, `PositiveReals`, `RealInterval`, `IntegerRange`,
-  `IntegerSimplex` and `RealVectors` supports. `UnitInterval` will arrive with the first
-  measure that needs one.
+- The `RealLine`, `NonNegativeReals`, `PositiveReals`, `RealInterval`, `UnitInterval`,
+  `IntegerRange`, `IntegerSimplex`, `RealSimplex` and `RealVectors` supports.
 - `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)` and `Uniform(a, b)`, with
   heterogeneous parameter types and no promotion or validation at construction.
 - `MvNormal(μ, L)`, the first multivariate measure, with the
@@ -80,6 +79,18 @@ and this project adheres to [Semantic Versioning].
   underflow. Relative accuracy sits at the rounding error of the argument type for shapes
   up to about `1000` and then falls off roughly in proportion to the shape: against
   `SpecialFunctions.gamma_inc` it is `5e-13` at shape `1000` and `2e-10` at shape `10^5`.
+- `Beta(α, β)` and its `UnitInterval` support. The density is closed form. The tails run
+  the incomplete beta continued fraction in log space and the quantile iterates Newton's
+  method on the logit, each until the terms stop changing the result, with the same
+  fixed-length path for traced numbers as `Gamma`. A draw is `X / (X + Y)` for two gamma
+  draws taken in log space, so small shapes do not underflow and the derivative with
+  respect to either shape is the exact reparameterization gradient.
+- `Dirichlet(α)`, the first continuous multivariate measure with a constrained support,
+  and its `RealSimplex`. Its density is the one with respect to the first
+  `length(α) - 1` entries, matching Distributions.jl, since a draw sums to one. A draw is
+  a vector of gamma draws divided by their sum, computed in log space, and is
+  differentiable in every shape. There is no `cdf`, `quantile` or `median`, as for the
+  other multivariate measures.
 - `validateparams(d)`, which returns `d` or throws a `DomainError`, for the boundary
   where user-supplied parameters enter. It earns its place on `Categorical`, whose
   sum-to-one is the one invalid parameter a density cannot report: an unnormalized `p`
@@ -101,6 +112,9 @@ and this project adheres to [Semantic Versioning].
 - The conformance allocation check now keeps every allocation but only the dynamic
   dispatch in this package's own code. `gamma_inc` reaches a `ccall` wrapper in
   SpecialFunctions that AllocCheck cannot resolve and that allocates nothing.
+- The conformance suite scalarizes a vector draw with a weighted sum rather than a
+  plain one. A plain sum is one for every draw on a simplex, which left `Dirichlet`'s
+  sample-derivative check with nothing to measure.
 - The conformance suite recognizes structural parameters, those that set a measure's
   support or its loop lengths, such as `Binomial`'s `n`. They are held fixed rather
   than swept through the AD and element-type checks, which would otherwise ask for a

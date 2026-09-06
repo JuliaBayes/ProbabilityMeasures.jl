@@ -97,9 +97,10 @@ _asexact(x::AbstractArray, ::Type{I}) where {I<:Integer} = _asexact.(x, I)
 
 _elscalar(d) = eltype(eltype(d))
 
-# Gradient checks need a scalar result.
+# Gradient checks need a scalar result. Weight the entries of a vector draw: a plain
+# sum is one for every measure whose draws lie on a simplex, and so has no gradient.
 _scalarize(x::Number) = x
-_scalarize(x::AbstractArray) = sum(x)
+_scalarize(x::AbstractArray) = sum(k * v for (k, v) in pairs(x))
 
 """
     test_measure(d; kwargs...)

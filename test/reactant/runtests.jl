@@ -24,6 +24,9 @@ using Test
         # Fixed-length incomplete gamma loops and Newton steps; both shape regimes.
         Gamma(2.0, 1.5),
         Gamma(0.5, 3.0),
+        # The incomplete beta fraction and the logit Newton solve; both shape regimes.
+        Beta(2.0, 3.0),
+        Beta(0.5, 0.5),
     )
         test_reactant(d, default_testpoints(d))
     end

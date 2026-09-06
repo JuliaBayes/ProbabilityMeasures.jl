@@ -121,3 +121,46 @@ end
 function insupport(s::RealVectors, x::AbstractVector{<:Number})
     return (length(x) == s.n) & all(isfinite, x)
 end
+
+"The unit interval, ``[0, 1]``."
+struct UnitInterval <: Support end
+
+#=
+  The upper bound is tested as `1 - x >= 0` rather than `x <= 1`. A density on the
+  interval takes `log(1 - x)`, whose guard compares `1 - x` with zero, and Reactant's
+  pass pipeline misplaces the negation it builds when it meets that guard's complement
+  written as `x <= 1`. Testing the same quantity in both places avoids the rewrite.
+=#
+function insupport(::UnitInterval, x::Number)
+    return isfinite(x) & (x >= zero(x)) & (one(x) - x >= zero(x))
+end
+
+Base.minimum(::UnitInterval) = 0.0
+Base.maximum(::UnitInterval) = 1.0
+
+"""
+    RealSimplex(k)
+
+The non-negative real vectors of length `k` whose entries sum to one.
+
+The sum is checked to `sqrt(eps)` of the working precision, as [`Categorical`](@ref)
+checks its probabilities.
+"""
+struct RealSimplex <: Support
+    k::Int
+end
+
+function insupport(s::RealSimplex, x::AbstractVector{<:Number})
+    length(x) == s.k || return false
+    total = zero(eltype(x))
+    # `min` keeps a `NaN` visible without changing numeric types.
+    least = zero(eltype(x))
+    finite = true
+    for xᵢ in x
+        finite &= isfinite(xᵢ)
+        total += xᵢ
+        least = min(least, xᵢ)
+    end
+    tol = sqrt(eps(basefloat(float(eltype(x)))))
+    return finite & (least >= zero(least)) & (abs(total - one(total)) <= tol)
+end

@@ -78,3 +78,39 @@ basefloat(::Type{T}) where {T<:AbstractFloat} = T
 basefloat(::Type{T}) where {T<:Real} = float(T)
 basefloat(::Type{Bool}) = Float64
 basefloat(::Type{<:Irrational}) = Float64
+
+"""
+    xlogyt(x, y)
+
+Compute `x * log(y)`, taking the product to be zero when `x` is zero and `log(y)` is
+not finite.
+
+A density whose exponent is zero needs that convention at the edge of its support,
+where the plain product would be `NaN`. The guard tests `log(y)` rather than `x` alone
+so that a zero `x` away from the edge still returns `x * log(y)`: that product is zero
+either way, but only the product carries the derivative of `x`, which a shape of
+exactly one would otherwise lose.
+"""
+@inline function xlogyt(x::Number, y::Number)
+    ly = logt(y)
+    # Some tools evaluate both choices, so neither choice may throw.
+    return select((x == zero(x)) & !isfinite(ly), () -> zero(float(x * ly)), () -> x * ly)
+end
+
+"""
+    logbetat(α, β)
+
+Compute ``\\log B(\\alpha, \\beta)`` from log-gamma values, returning `NaN` instead of
+throwing for a non-positive argument.
+
+`SpecialFunctions.logbeta` branches on its arguments and so cannot be traced. The three
+log-gamma calls here can.
+"""
+@inline function logbetat(α::Number, β::Number)
+    valid = (α > zero(α)) & (β > zero(β))
+    # `loggamma` throws below zero, so call it at one when the arguments are invalid.
+    a = select(valid, () -> α, () -> one(α))
+    b = select(valid, () -> β, () -> one(β))
+    v = loggamma(a) + loggamma(b) - loggamma(a + b)
+    return select(valid, () -> v, () -> oftype(v, NaN))
+end

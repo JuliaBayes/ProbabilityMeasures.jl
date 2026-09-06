@@ -11,8 +11,9 @@ density and sampling operations, and compatible with automatic differentiation,
 broadcasting on GPU arrays, and Reactant tracing.
 
 The package is experimental. At present it implements `Normal`, `LogNormal`,
-`Exponential`, `Weibull`, `Gamma`, `Uniform`, `Laplace`, `Cauchy`, `Categorical`,
-`Bernoulli`, `Binomial`, `Poisson`, `Geometric`, `MvNormal`, and `Multinomial`.
+`Exponential`, `Weibull`, `Gamma`, `Beta`, `Uniform`, `Laplace`, `Cauchy`,
+`Categorical`, `Bernoulli`, `Binomial`, `Poisson`, `Geometric`, `MvNormal`, `Dirichlet`,
+and `Multinomial`.
 
 ## Installation
 
@@ -62,8 +63,8 @@ than throwing.
 ## Available API
 
 `Normal(μ, σ)`, `LogNormal(μ, σ)`, `Exponential(θ)`, `Weibull(α, θ)`, `Gamma(α, θ)`,
-`Uniform(a, b)`, `Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`, `Bernoulli(p)`,
-`Binomial(n, p)`, `Poisson(λ)`, and `Geometric(p)` each support:
+`Beta(α, β)`, `Uniform(a, b)`, `Laplace(μ, b)`, `Cauchy(μ, σ)`, `Categorical(p)`,
+`Bernoulli(p)`, `Binomial(n, p)`, `Poisson(λ)`, and `Geometric(p)` each support:
 
 - `densityof` and `logdensityof`
 - `cdf`, `ccdf`, `logcdf`, and `logccdf`
@@ -81,6 +82,12 @@ changing the result, so `BigFloat` keeps its precision and differentiation tools
 the iteration. Under Reactant they run a fixed number of terms instead, exact for shapes
 up to about `900` in `Float64`. Sampling inverts the CDF, so derivatives of a draw with
 respect to `α` and `θ` are exact.
+
+`Beta(α, β)` has a closed-form density. Its `cdf`, `ccdf`, `logcdf`, `logccdf`,
+`quantile`, `median` and `rand` run a continued fraction and Newton's method until the
+terms stop changing the result, or a fixed number of terms under Reactant. A draw is
+`X / (X + Y)` for two `Gamma` draws, so its derivatives with respect to `α` and `β` are
+exact.
 
 `Categorical(p)` assigns the probabilities in `p` to categories `1:length(p)`. Draws
 and quantiles use the promoted floating-point type of `p`:
@@ -131,6 +138,14 @@ contains standard deviations, not variances.
 `std`, `params`, `support`, `insupport`, and `checkparams`. Its samples are count vectors
 in `IntegerSimplex(n, length(p))`, and `var` and `std` return marginal values. As with
 `MvNormal`, multivariate `cdf`, `quantile`, and `median` are not provided.
+
+`Dirichlet(α)` supports `densityof`, `logdensityof`, `rand`, `mean`, `cov`, `var`,
+`std`, `entropy`, `params`, `support`, `insupport`, and `checkparams`. Its samples are
+probability vectors in `RealSimplex(length(α))`, and because a draw sums to one, the
+density is the one with respect to the first `length(α) - 1` entries, matching
+Distributions.jl. A draw is a vector of `Gamma` draws divided by their sum, so it is
+differentiable in every shape. Multivariate `cdf`, `quantile`, and `median` are not
+provided.
 
 The density result follows normal Julia promotion rules across the parameters and
 evaluation point:
