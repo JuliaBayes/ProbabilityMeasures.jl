@@ -1,5 +1,25 @@
 {
-  "projectName": "ProbabilityMeasures",
-  "projectOwner": "rsenne",
-  "files": ["README.md", "docs/src/index.md"]
+  "projectName": "ProbabilityMeasures.jl",
+  "projectOwner": "JuliaBayes",
+  "files": [
+    "README.md",
+    "docs/src/index.md"
+  ],
+  "commitType": "docs",
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "contributors": [
+    {
+      "login": "rsenne",
+      "name": "Ryan Senne",
+      "avatar_url": "https://avatars.githubusercontent.com/u/50930199?v=4",
+      "profile": "https://github.com/rsenne",
+      "contributions": [
+        "code",
+        "ideas",
+        "doc",
+        "test"
+      ]
+    }
+  ]
 }
