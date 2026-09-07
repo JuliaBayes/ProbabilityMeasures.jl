@@ -21,6 +21,17 @@
         "test",
         "maintenance"
       ]
+    },
+    {
+      "login": "penelopeysm",
+      "name": "Penelope Yong",
+      "avatar_url": "https://avatars.githubusercontent.com/u/122629585?v=4",
+      "profile": "https://pysm.dev",
+      "contributions": [
+        "ideas",
+        "code",
+        "test"
+      ]
     }
   ]
 }
