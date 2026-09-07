@@ -22,6 +22,37 @@
         "maintenance",
         "review"
       ]
+    },
+    {
+      "login": "penelopeysm",
+      "name": "Penelope Yong",
+      "avatar_url": "https://avatars.githubusercontent.com/u/122629585?v=4",
+      "profile": "https://pysm.dev",
+      "contributions": [
+        "ideas",
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "simonsteiger",
+      "name": "Simon Steiger",
+      "avatar_url": "https://avatars.githubusercontent.com/u/106233551?v=4",
+      "profile": "http://birdsotherwi.se",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "BJMCox",
+      "name": "BJMCox",
+      "avatar_url": "https://avatars.githubusercontent.com/u/31897579?v=4",
+      "profile": "https://bjmcox.github.io/",
+      "contributions": [
+        "code",
+        "test"
+      ]
     }
   ]
 }
