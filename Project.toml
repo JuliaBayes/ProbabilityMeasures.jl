@@ -28,7 +28,7 @@ ProbabilityMeasuresReactantExt = "Reactant"
 ProbabilityMeasuresReverseDiffExt = "ReverseDiff"
 
 [compat]
-DensityInterface = "0.4.0"
+DensityInterface = "0.4.0, 1.0"
 EnzymeCore = "0.8.15"
 ForwardDiff = "0.10, 1"
 IrrationalConstants = "0.2.6"
